@@ -1,10 +1,13 @@
 import { KoleError, tokenize } from './lexer.mjs';
 import { literalNumber, makeChar } from './numbers.mjs';
 
-const reserved = new Set(['extends', 'override', 'abstract', 'super', 'class', 'interface', 'implements', 'public', 'private', 'static', 'enum', 'state', 'requires', 'transitions', 'require', 'if', 'else', 'while', 'for', 'return', 'break', 'continue', 'new', 'me', 'this', 'true', 'false', 'null', 'owns', 'belongsTo', 'atomic']);
+const reserved = new Set(['package', 'import', 'extends', 'override', 'abstract', 'super', 'class', 'interface', 'implements', 'public', 'private', 'static', 'enum', 'state', 'requires', 'transitions', 'require', 'if', 'else', 'while', 'for', 'return', 'break', 'continue', 'new', 'me', 'this', 'true', 'false', 'null', 'owns', 'belongsTo', 'atomic']);
 const precedence = { '=': 1, '+=': 1, '-=': 1, '||': 2, '&&': 3, '==': 4, '!=': 4, '<': 5, '>': 5, '<=': 5, '>=': 5, '+': 6, '-': 6, '*': 7, '/': 7, '%': 7 };
 
-export function parse(source) { return new Parser(tokenize(source)).program(); }
+export function parse(source, file) {
+  try { return new Parser(tokenize(source).map(token => ({ ...token, file }))).program(); }
+  catch (error) { if (file) error.file ??= file; throw error; }
+}
 
 class Parser {
   constructor(tokens) { this.tokens = tokens; this.pos = 0; this.loops = 0; }
@@ -52,11 +55,23 @@ class Parser {
     }
     return { access, isStatic, isAbstract, isOverride };
   }
+  qualifiedName() {
+    let name = this.name(); while (this.match('.')) name += '.' + this.name(); return name;
+  }
   program() {
+    const packageName = this.match('package') ? this.qualifiedName() : '';
+    if (packageName) this.expect(';');
+    const imports = [];
+    while (this.match('import')) {
+      const token = this.peek();
+      const file = token.kind === 'string';
+      const name = file ? this.take().text : this.qualifiedName();
+      this.expect(';'); imports.push({ name, file, token });
+    }
     const classes = [];
     while (this.peek().kind !== 'eof') classes.push(this.classDecl());
     if (!classes.length) throw new KoleError('Expected at least one class', this.peek());
-    return { classes };
+    return { classes, packageName, imports };
   }
   classDecl() {
     const token = this.peek();

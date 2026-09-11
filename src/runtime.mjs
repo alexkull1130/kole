@@ -19,7 +19,7 @@ export class Runtime {
     this.classes = new Map(); this.print = print; this.steps = 0; this.maxSteps = maxSteps; this.depth = 0;
     for (const declaration of program.classes) {
       if (this.classes.has(declaration.name) || [...primitiveTypes, 'boolean', 'String', 'double', 'List', 'void', 'print'].includes(declaration.name)) this.fail(declaration, `Duplicate or reserved class '${declaration.name}'`);
-      this.classes.set(declaration.name, { kind: declaration.isInterface ? 'interface' : 'class', name: declaration.name, fields: new Map(), methods: new Map(), enums: new Map(), declaration, lifecycle: null, interfaces: new Set(declaration.interfaces ?? []) });
+      this.classes.set(declaration.name, { kind: declaration.isInterface ? 'interface' : 'class', name: declaration.name, aliases: declaration.aliases, fields: new Map(), methods: new Map(), enums: new Map(), declaration, lifecycle: null, interfaces: new Set(declaration.interfaces ?? []) });
     }
     for (const cls of this.classes.values()) {
       const names = new Set();
@@ -61,10 +61,10 @@ export class Runtime {
       }
     }
     for (const cls of this.classes.values()) {
-      for (const field of cls.fields.values()) this.validateType(field.type, cls, field);
+      for (const field of cls.fields.values()) this.validateType(field.type, field.owner ?? cls, field);
       for (const method of cls.methods.values()) {
-        if (method.type !== 'void') this.validateType(method.type, cls, method);
-        for (const p of method.params) this.validateType(p.type, cls, p);
+        if (method.type !== 'void') this.validateType(method.type, method.owner ?? cls, method);
+        for (const p of method.params) this.validateType(p.type, method.owner ?? cls, p);
       }
     }
     for (const cls of this.classes.values()) {
@@ -102,8 +102,9 @@ export class Runtime {
     if (type.endsWith('?')) return this.validateType(type.slice(0, -1), owner, node);
     if (type.endsWith('[]')) return this.validateType(type.slice(0, -2), owner, node);
     if (type.startsWith('List<') && type.endsWith('>')) return this.validateType(type.slice(5, -1), owner, node);
+    if (this.classes.has(type) && owner?.aliases && ![...owner.aliases.values()].includes(type)) this.fail(node, `Type '${type}' must be imported in this file`);
     const parts = type.split('.');
-    if (parts.length === 2 && this.classes.get(parts[0])?.enums.has(parts[1])) return;
+    if (parts.length >= 2 && this.classes.get(parts.slice(0, -1).join('.'))?.enums.has(parts.at(-1))) return;
     if (!primitiveTypes.includes(type) && !this.classes.has(type) && !owner?.enums.has(type)) this.fail(node, `Unknown type '${type}'`);
   }
   typeKey(type, owner) {
@@ -125,7 +126,7 @@ export class Runtime {
     else if (type === 'bool') valid = typeof value === 'boolean';
     else if (type === 'string') valid = typeof value === 'string';
     else if (type === 'char') valid = value?.kind === 'char';
-    else if (owner?.enums.has(type) || type.includes('.')) valid = value?.kind === 'enumValue' && `${value.owner}.${value.type}` === this.typeKey(type, owner);
+    else if (owner?.enums.has(type) || (!this.classes.has(type) && type.includes('.'))) valid = value?.kind === 'enumValue' && `${value.owner}.${value.type}` === this.typeKey(type, owner);
     else valid = value?.kind === 'instance' && isSubtype(value.cls, type);
     if (!valid) this.fail(node, `Expected ${type}, received ${this.format(value)}`);
     return value;
@@ -256,7 +257,8 @@ export class Runtime {
       if (value) return value;
     }
     if (scope.owner?.methods.has(name)) return this.member(scope.self ?? scope.owner, name, scope, node);
-    if (this.classes.has(name)) return this.classes.get(name);
+    const className = scope.owner?.aliases ? scope.owner.aliases.get(name) : name;
+    if (this.classes.has(className)) return this.classes.get(className);
     if (name === 'print') return { kind: 'print' };
     if (primitiveTypes.includes(name)) return { kind: 'conversion', type: name };
     this.fail(node, `Unknown name '${name}'`);
@@ -492,6 +494,7 @@ export class Runtime {
 
 export function run(source, entry, options = {}) {
   const program = parse(source);
+  if (program.imports.length || program.packageName) throw new KoleError('Use loadProgram or the kole CLI for packages and imports');
   const runtime = new Runtime(program, options);
   check(program, runtime);
   runtime.run(entry, options.args ?? []);

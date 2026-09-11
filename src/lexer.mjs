@@ -2,6 +2,7 @@ export class KoleError extends Error {
   constructor(message, token) {
     super(message);
     this.name = 'KoleError';
+    this.file = token?.file;
     this.line = token?.line ?? 1;
     this.column = token?.column ?? 1;
   }

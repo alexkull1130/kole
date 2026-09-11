@@ -104,7 +104,8 @@ class Checker {
       if (enumeration.values.has(name)) return value(`${enumeration.owner}.${enumeration.name}`);
     }
     if (scope.owner.methods.has(name)) return this.member(scope.instance ? value(scope.owner.name) : { kind: 'class', cls: scope.owner }, name, scope, node);
-    if (this.classes.has(name)) return { kind: 'class', cls: this.classes.get(name) };
+    const className = scope.owner.aliases ? scope.owner.aliases.get(name) : name;
+    if (this.classes.has(className)) return { kind: 'class', cls: this.classes.get(className) };
     if (name === 'print') return { kind: 'print' };
     if (primitiveTypes.includes(name)) return { kind: 'conversion', type: name };
     this.fail(node, `Unknown name '${name}'`);
