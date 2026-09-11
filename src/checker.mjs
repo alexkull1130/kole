@@ -305,6 +305,38 @@ class Checker {
         if (type.endsWith('?') && initial && initial.type !== 'null' && !initial.type.endsWith('?')) scope.facts.set(binding, type.slice(0, -1));
         break;
       }
+      case 'throw': this.expect('Error', this.expression(node.value, scope), node); return new Set(['throw']);
+      case 'using': {
+        const type = this.type(node.type, scope.owner, node);
+        if (!this.assignable('Closeable', type)) this.fail(node, 'using requires a non-null Closeable');
+        this.expect(type, this.expression(node.value, scope, type), node);
+        const local = new Scope(scope); this.declare(local, node.name, type, node, true);
+        const paths = this.statement(node.body, local, returnType); scope.facts = local.facts; return paths;
+      }
+      case 'try': {
+        this.killLoopFacts(node, scope);
+        const local = new Scope(scope), paths = this.statement(node.body, local, returnType), branches = [];
+        if (paths.has('normal')) branches.push(local);
+        const caught = [];
+        for (const handler of node.catches) {
+          const type = this.type(handler.type, scope.owner, handler);
+          if (!this.assignable('Error', type) || type.endsWith('?')) this.fail(handler, 'catch requires a non-null Error subtype');
+          if (caught.some(previous => this.assignable(previous, type))) this.fail(handler, 'Unreachable catch: an earlier handler catches this type');
+          caught.push(type);
+          const branch = new Scope(scope); this.declare(branch, handler.name, type, handler);
+          const outcomes = this.statement(handler.body, branch, returnType);
+          for (const outcome of outcomes) paths.add(outcome);
+          if (outcomes.has('normal')) branches.push(branch);
+        }
+        scope.facts = this.commonFacts(branches);
+        if (node.finalizer) {
+          this.killLoopFacts(node, scope);
+          const final = this.statement(node.finalizer, scope, returnType);
+          if (!final.has('normal')) return final;
+          for (const outcome of final) if (outcome !== 'normal') paths.add(outcome);
+        }
+        return paths;
+      }
       case 'superCall': this.fail(node, 'super(...) must be the first constructor statement of a subclass'); break;
       case 'expression': this.expression(node.expression, scope); break;
       case 'require': this.expect('bool', this.expression(node.condition, scope), node.condition); this.refine(node.condition, true, scope); break;

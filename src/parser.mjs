@@ -1,7 +1,7 @@
 import { KoleError, tokenize } from './lexer.mjs';
 import { literalNumber, makeChar } from './numbers.mjs';
 
-const reserved = new Set(['package', 'import', 'extends', 'override', 'abstract', 'super', 'class', 'interface', 'implements', 'public', 'private', 'static', 'enum', 'state', 'requires', 'transitions', 'require', 'if', 'else', 'while', 'for', 'return', 'break', 'continue', 'new', 'me', 'this', 'true', 'false', 'null', 'owns', 'belongsTo', 'atomic']);
+const reserved = new Set(['try', 'catch', 'finally', 'throw', 'using', 'package', 'import', 'extends', 'override', 'abstract', 'super', 'class', 'interface', 'implements', 'public', 'private', 'static', 'enum', 'state', 'requires', 'transitions', 'require', 'if', 'else', 'while', 'for', 'return', 'break', 'continue', 'new', 'me', 'this', 'true', 'false', 'null', 'owns', 'belongsTo', 'atomic']);
 const precedence = { '=': 1, '+=': 1, '-=': 1, '||': 2, '&&': 3, '==': 4, '!=': 4, '<': 5, '>': 5, '<=': 5, '>=': 5, '+': 6, '-': 6, '*': 7, '/': 7, '%': 7 };
 
 export function parse(source, file) {
@@ -167,6 +167,21 @@ class Parser {
   }
   statement() {
     const token = this.peek();
+    if (this.match('throw')) { const value = this.expression(); this.expect(';'); return { kind: 'throw', value, token }; }
+    if (this.match('try')) {
+      const body = this.block(), catches = [];
+      while (this.match('catch')) {
+        const token = this.expect('('), name = this.name(); this.expect(':'); const type = this.type(); this.expect(')');
+        catches.push({ name, type, body: this.block(), token });
+      }
+      const finalizer = this.match('finally') ? this.block() : null;
+      if (!catches.length && !finalizer) throw new KoleError('try requires catch or finally', token);
+      return { kind: 'try', body, catches, finalizer, token };
+    }
+    if (this.match('using')) {
+      this.expect('('); const name = this.name(); this.expect(':'); const type = this.type(); this.expect('=');
+      const value = this.expression(); this.expect(')'); return { kind: 'using', name, type, value, body: this.block(), token };
+    }
     if (this.at('super') && this.peek(1).text === '(') {
       this.take(); this.expect('('); const args = this.arguments(); this.expect(';');
       return { kind: 'superCall', args, token };

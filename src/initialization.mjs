@@ -115,6 +115,31 @@ class Analysis {
         state = new Set(state); if (node.value) state.add(node);
         break;
       case 'expression': state = this.expression(node.expression, scope, state); break;
+      case 'throw': return new Map([['throw', this.expression(node.value, scope, state)]]);
+      case 'using': {
+        state = this.expression(node.value, scope, state);
+        const local = new Scope(scope); local.locals.set(node.name, node); const ready = new Set(state); ready.add(node);
+        return this.statement(node.body, local, ready);
+      }
+      case 'try': {
+        let flow = this.statement(node.body, new Scope(scope), state);
+        for (const handler of node.catches) {
+          const local = new Scope(scope), caught = new Set(state); local.locals.set(handler.name, handler); caught.add(handler);
+          flow = merge(flow, this.statement(handler.body, local, caught));
+        }
+        if (node.finalizer) {
+          // The finalizer can also run after an exception from any expression.
+          this.statement(node.finalizer, new Scope(scope), state);
+          let combined = new Map();
+          for (const [kind, exit] of flow) {
+            const final = this.statement(node.finalizer, new Scope(scope), exit), result = new Map();
+            for (const [outcome, ready] of final) result.set(outcome === 'normal' ? kind : outcome, ready);
+            combined = merge(combined, result);
+          }
+          flow = combined;
+        }
+        return flow;
+      }
       case 'return': return new Map([['return', node.value ? this.expression(node.value, scope, state) : state]]);
       case 'break': case 'continue': return new Map([[node.kind, state]]);
       case 'require': {

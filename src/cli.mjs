@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { KoleThrown } from './standard.mjs';
 import { loadProgram } from './modules.mjs';
 import path from 'node:path';
 import { KoleError } from './lexer.mjs';
@@ -20,9 +21,12 @@ if (command === 'alex' && !file) {
     if (command === 'run') runtime.run(program.entry, args);
     else console.log(`${file}: static checks passed`);
   } catch (error) {
-    if (error instanceof KoleError) console.error(`${error.file ?? file}:${error.line}:${error.column}: ${error.message}`);
+    if (error instanceof KoleThrown) console.error(`${error.file ?? file}:${error.line}:${error.column}: ${error.value.cls.name}: ${error.message}`);
+    else if (error instanceof KoleError) console.error(`${error.file ?? file}:${error.line}:${error.column}: ${error.message}`);
     else if (error.code) console.error(`kole: ${error.message}`);
     else { console.error(`kole: internal error: ${error.message}`); }
+    for (const frame of error.koleStack ?? []) console.error(`  at ${frame.method} (${frame.file ?? file}:${frame.line ?? 1}:${frame.column ?? 1})`);
+    for (const suppressed of error.suppressed ?? []) console.error(`  suppressed: ${suppressed.message}`);
     process.exitCode = 1;
   }
 }

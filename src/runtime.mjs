@@ -1,3 +1,4 @@
+import { withStandard, KoleThrown, invokeStandard, readConsoleLine } from './standard.mjs';
 import { specializeGenerics, genericParts } from './generics.mjs';
 import { linkInheritance, isSubtype } from './inheritance.mjs';
 import { builtinSignature, callBuiltin } from './builtins.mjs';
@@ -16,9 +17,9 @@ class Scope {
 }
 
 export class Runtime {
-  constructor(program, { print = console.log, maxSteps = 1_000_000 } = {}) {
-    program = specializeGenerics(program);
-    this.classes = new Map(); this.print = print; this.steps = 0; this.maxSteps = maxSteps; this.depth = 0;
+  constructor(program, { print = console.log, maxSteps = 1_000_000, input = readConsoleLine, write = text => process.stdout.write(text) } = {}) {
+    program = specializeGenerics(withStandard(program));
+    this.classes = new Map(); this.print = print; this.input = input; this.writeOutput = write; this.steps = 0; this.maxSteps = maxSteps; this.depth = 0;
     for (const declaration of program.classes) {
       if (this.classes.has(declaration.name) || [...primitiveTypes, 'boolean', 'String', 'double', 'List', 'void', 'print'].includes(declaration.name)) this.fail(declaration, `Duplicate or reserved class '${declaration.name}'`);
       this.classes.set(declaration.name, { kind: declaration.isInterface ? 'interface' : 'class', name: declaration.name, aliases: declaration.aliases, genericBase: declaration.genericBase, fields: new Map(), methods: new Map(), enums: new Map(), declaration, lifecycle: null, interfaces: new Set(declaration.interfaces ?? []) });
@@ -100,7 +101,8 @@ export class Runtime {
     }
   }
   fail(node, message) { throw new KoleError(message, node?.token ?? node); }
-  tick(node) { if (++this.steps > this.maxSteps) this.fail(node, 'Execution step limit exceeded'); }
+  fatal(node, message) { const error = new KoleError(message, node?.token ?? node); error.unrecoverable = true; throw error; }
+  tick(node) { if (++this.steps > this.maxSteps) this.fatal(node, 'Execution step limit exceeded'); }
   validateType(type, owner, node) {
     if (type.endsWith('?')) return this.validateType(type.slice(0, -1), owner, node);
     if (type.endsWith('[]')) return this.validateType(type.slice(0, -2), owner, node);
@@ -397,6 +399,31 @@ export class Runtime {
         for (const statement of node.statements) this.statement(statement, local);
         break;
       }
+      case 'throw': {
+        const value = this.checkType('Error', this.eval(node.value, scope), scope.owner, node);
+        throw new KoleThrown(value, node.token);
+      }
+      case 'try': {
+        try { this.statement(node.body, scope); }
+        catch (error) {
+          const thrown = this.exception(error, node);
+          const handler = thrown && node.catches.find(handler => isSubtype(thrown.value.cls, handler.type));
+          if (!handler) throw error;
+          const local = new Scope(scope); this.declare(local, handler.name, handler.type, thrown.value, handler);
+          this.statement(handler.body, local);
+        } finally { if (node.finalizer) this.statement(node.finalizer, scope); }
+        break;
+      }
+      case 'using': {
+        const local = new Scope(scope), resource = this.eval(node.value, scope);
+        this.declare(local, node.name, node.type, resource, node, true);
+        let pending;
+        try { this.statement(node.body, local); } catch (error) { pending = error; }
+        try { this.invoke(this.member(resource, 'close', local, node), [], node); }
+        catch (error) { if (pending && !(pending instanceof Flow)) { (pending.suppressed ??= []).push(error); } else pending = error; }
+        if (pending) throw pending;
+        break;
+      }
       case 'superCall': this.fail(node, 'super(...) must be the first constructor statement'); break;
       case 'declare': this.declare(scope, node.name, node.type, node.value ? this.eval(node.value, scope) : UNSET, node); break;
       case 'expression': this.eval(node.expression, scope); break;
@@ -424,6 +451,12 @@ export class Runtime {
       default: this.fail(node, `Unknown statement '${node.kind}'`);
     }
   }
+  exception(error, node) {
+    if (error instanceof KoleThrown) return error;
+    if (!(error instanceof KoleError) || error.unrecoverable) return null;
+    const value = this.create('RuntimeError', [error.message], { owner: null }, node);
+    const thrown = new KoleThrown(value, error); thrown.koleStack = error.koleStack ?? []; return thrown;
+  }
   loopBody(body, scope) {
     try { this.statement(body, scope); }
     catch (flow) { if (flow instanceof Flow && ['break', 'continue'].includes(flow.kind)) return flow.kind; throw flow; }
@@ -433,7 +466,7 @@ export class Runtime {
     if (!cls) this.fail(node, `Unknown class '${name}'`);
     if (cls.kind === 'interface') this.fail(node, `Cannot construct interface '${name}'`);
     if (cls.isAbstract) this.fail(node, `Cannot construct abstract class '${name}'`);
-    if (++this.depth > 256) { this.depth--; this.fail(node, 'Call depth limit exceeded during object construction'); }
+    if (++this.depth > 256) { this.depth--; this.fatal(node, 'Call depth limit exceeded during object construction'); }
     const object = { kind: 'instance', cls, fields: new Map(), transitioning: false, ownerSlot: null, constructing: true };
     try {
     for (const field of cls.fields.values()) object.fields.set(field.name, { type: field.type, value: field.relationship === 'belongsTo' ? null : UNSET, owner: field.owner, readonly: field.lifecycle || field.relationship === 'belongsTo', definition: field, object });
@@ -474,6 +507,10 @@ export class Runtime {
     try {
       const scope = new Scope(null, cls, self);
       method.params.forEach((p, i) => this.declare(scope, p.name, p.type, args[i], p));
+      if (method.native) {
+        const result = invokeStandard(this, method.native, self, method.params.map(p => scope.find(p.name).value), node);
+        return method.type === 'void' ? undefined : this.checkType(method.type, result, cls, method);
+      }
       if (method.from) {
         const state = this.read(self.fields.get(cls.lifecycle.name), method);
         if (state.name !== method.from) this.fail(node, `Expected state ${method.from}; actual: ${state.name}`);
@@ -489,6 +526,9 @@ export class Runtime {
       else value = this.checkType(method.type, value, cls, method);
       if (method.to) self.fields.get(cls.lifecycle.name).value = cls.enums.get(cls.lifecycle.type).values.get(method.to);
       return value;
+    } catch (error) {
+      if (!(error instanceof Flow)) (error.koleStack ??= []).push({ method: cls.name + '.' + method.name, ...node?.token });
+      throw error;
     } finally { this.depth--; if (transitionStarted) self.transitioning = false; }
   }
   run(entry, args = []) {
