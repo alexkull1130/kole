@@ -4,7 +4,7 @@ kole is a Java-inspired, object-oriented programming language. Its working direc
 
 The agreed syntax, full feature roadmap, optional memory management, and Alex Kull Easter egg are recorded in [requirements](docs/requirements.md).
 
-Version 0.3 adds initialization checks, interfaces, null safety, and single-object ownership relationships. The current-object keyword is **`me`**. See [objects and safety](docs/objects-and-safety.md) for the implemented rules and limitations.
+Version 0.4 adds checked primitive arithmetic, exact long values, Unicode chars, mutable arrays, and `List<A>`. Type names are `byte`, `short`, `int`, `long`, `float`, `char`, `bool`, and `string`; `double` is not supported. See [values and collections](docs/values-and-collections.md). The existing OOP rules are in [objects and safety](docs/objects-and-safety.md). The current-object keyword is **`me`**.
 
 This folder contains the first working kole interpreter. kole has its own lexer, parser, object model, and execution engine. It does not depend on Java, the JVM, or Java libraries, and does not translate programs into Java or JavaScript.
 
@@ -23,6 +23,8 @@ Open a terminal in this folder:
 .\kole.cmd run examples\Interfaces.k
 .\kole.cmd run examples\NullSafety.k
 .\kole.cmd run examples\Relationships.k
+.\kole.cmd run examples\Primitives.k
+.\kole.cmd run examples\Collections.k
 ```
 
 On any platform with Node.js:
@@ -33,7 +35,7 @@ node src/cli.mjs check examples/Connection.k
 node --test
 ```
 
-`run` checks the complete program, then executes the public static `main` method in the class matching the file name. It accepts `main() -> void` or `main(args: String[]) -> void`. Arguments after the source path are passed to the program.
+`run` checks the complete program, then executes the public static `main` method in the class matching the file name. It accepts `main() -> void` or `main(args: string[]) -> void`. Arguments after the source path are passed to the program.
 
 `check` validates declarations, field initializers, and every method body without executing the program. It catches unknown names/members, incorrect types and arguments, access violations, invalid assignments, missing return paths, uninitialized locals, incomplete constructor paths, interface mismatches, and unsafe nullable access. Lifecycle state, ownership conflicts/cycles, overflow, index safety, and alias-related initialization hazards retain runtime checks. Errors identify the `.k` source line and column and return a nonzero exit status.
 
@@ -45,11 +47,12 @@ node --test
 - Definite assignment for locals and constructor fields, plus nominal interfaces with checked implementations.
 - Non-null types by default, explicit `Type?`, and null-check narrowing of locals and parameters.
 - Single-object `owns` fields and automatically maintained nullable `belongsTo` back-references.
-- Declared `int`, `double`, `boolean`, `String`, class, and local enum types, with static checking and runtime enforcement.
-- Arithmetic, comparisons, boolean short circuiting, assignment, strings, and `print(...)`.
+- `byte`, `short`, `int`, `long`, `float`, `char`, `bool`, `string`, class, interface, and enum types with static and runtime checks.
+- Checked arithmetic, explicit numeric conversions, integer division, and binary32 float semantics.
+- Arithmetic, comparisons, bool short circuiting, assignment, strings, and `print(...)`.
 - Explicit range loops, nested loops, `while`, `if`/`else`, `break`, `continue`, and `return`.
 - Local enums, private lifecycle fields, method state guards, successful state transitions, and `require` preconditions.
-- String length/indexing and reading the entrypoint's argument array.
+- Unicode scalar string length/indexing, mutable fixed-length arrays, and built-in List<A>.
 
 See [the bootstrap specification](docs/bootstrap-spec.md) for exact behavior and limitations. The remaining sections record the broader language direction; they are not claims that all proposed features exist.
 
@@ -67,7 +70,7 @@ See [the bootstrap specification](docs/bootstrap-spec.md) for exact behavior and
 - Data classes with generated constructors, equality, and readable printing.
 - Sealed types and exhaustive pattern matching.
 - Properties with controlled access.
-- Class/interface inheritance, generics, and user-defined exceptions.
+- Class/interface inheritance, user-defined generics, and user-defined exceptions.
 - Compile-time lifecycle analysis where possible; guards currently run at runtime.
 
 ## Further candidates
@@ -104,7 +107,7 @@ The bootstrap provisionally excludes the endpoint, evaluates both bounds once fr
 
 ### Classes
 
-This broader sketch uses accepted declaration syntax. Generic collections below remain planned; runnable single-object relationship examples are in `examples/`.
+This broader sketch includes planned ownership of collections. Ordinary List<A> is implemented, but owns List<A> remains unsupported. Runnable examples are in `examples/`.
 
 ```java
 public class Order {
@@ -114,7 +117,7 @@ public class Order {
 
     private state status: State = DRAFT;
     private belongsTo customer: Customer?;
-    private owns items: List<OrderItem> = new List<>();
+    private owns items: List<OrderItem> = new List<OrderItem>();
 
     public add(item: OrderItem) -> void requires DRAFT {
         items.add(item);

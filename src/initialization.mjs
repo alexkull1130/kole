@@ -38,6 +38,7 @@ class Analysis {
     const symbol = this.symbol(node, scope);
     if (symbol) { if (read) this.read(symbol, state, node); return { symbol, state }; }
     if (node.kind === 'member') state = this.expression(node.object, scope, state);
+    if (node.kind === 'index') state = this.expression(node.index, scope, this.expression(node.object, scope, state));
     return { symbol: null, state };
   }
   expression(node, scope, incoming) {
@@ -78,6 +79,9 @@ class Analysis {
         for (const arg of node.args) state = this.expression(arg, scope, state);
         break;
       case 'new': for (const arg of node.args) state = this.expression(arg, scope, state); break;
+      case 'array': for (const item of node.items) state = this.expression(item, scope, state); break;
+      case 'newArray': state = this.expression(node.size, scope, state); break;
+      case 'newList': for (const arg of node.args) state = this.expression(arg, scope, state); break;
     }
     return state;
   }

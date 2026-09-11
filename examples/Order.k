@@ -1,6 +1,6 @@
 class Customer {
-    public name: String;
-    public Customer(name: String) { me.name = name; }
+    public name: string;
+    public Customer(name: string) { me.name = name; }
 }
 
 public class Order {

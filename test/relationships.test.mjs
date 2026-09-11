@@ -59,7 +59,7 @@ test('relationships: runtime rejects direct back-reference assignment', () => {
 test('relationships: dangling, ambiguous and unsupported declaration types fail', () => {
   assert.throws(() => validate('class Child { belongsTo parent: Parent?; } class Parent {}'), /matching owns/);
   assert.throws(() => validate('class Child { belongsTo p: Parent?; belongsTo q: Parent?; } class Parent { owns child: Child?=null; }'), /Ambiguous/);
-  assert.throws(() => validate('class Parent { owns child: String?=null; }'), /concrete class/);
+  assert.throws(() => validate('class Parent { owns child: string?=null; }'), /concrete class/);
   assert.throws(() => validate('interface I {} class Parent { owns child: I?=null; }'), /concrete class/);
 });
 test('relationships: owns can exist without a back-reference', () => {

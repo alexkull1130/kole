@@ -1,7 +1,7 @@
 class Page {
     public belongsTo notebook: Notebook?;
-    public text: String;
-    public Page(text: String) { me.text = text; }
+    public text: string;
+    public Page(text: string) { me.text = text; }
     public describeOwner() -> void {
         owner: Notebook? = notebook;
         if(owner != null) { print(text, "belongs to", owner.name); }
@@ -10,9 +10,9 @@ class Page {
 }
 
 class Notebook {
-    public name: String;
+    public name: string;
     private owns page: Page? = null;
-    public Notebook(name: String) { me.name = name; }
+    public Notebook(name: string) { me.name = name; }
     public attach(page: Page) -> void { me.page = page; }
     public detach() -> void { page = null; }
 }

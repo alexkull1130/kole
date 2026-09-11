@@ -1,5 +1,5 @@
 class NullSafety {
-    public static greet(name: String?) -> void {
+    public static greet(name: string?) -> void {
         if(name == null) {
             print("Hello, stranger");
             return;

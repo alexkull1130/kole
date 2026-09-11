@@ -12,25 +12,25 @@ test('initialization: local reads and compound assignments need a value', () => 
   validate(source('n: int; n = 3; print(n);'));
 });
 test('initialization: branch intersection checks all reachable paths', () => {
-  assert.throws(() => validate(source('', 'f(b: boolean) -> int { n: int; if(b) { n=1; } return n; }')), /before it is initialized/);
-  validate(source('', 'f(b: boolean) -> int { n: int; if(b) { n=1; } else { n=2; } return n; }'));
-  validate(source('', 'f(b: boolean) -> int { n: int; if(b) { return 0; } else { n=2; } return n; }'));
+  assert.throws(() => validate(source('', 'f(b: bool) -> int { n: int; if(b) { n=1; } return n; }')), /before it is initialized/);
+  validate(source('', 'f(b: bool) -> int { n: int; if(b) { n=1; } else { n=2; } return n; }'));
+  validate(source('', 'f(b: bool) -> int { n: int; if(b) { return 0; } else { n=2; } return n; }'));
 });
 test('initialization: potentially empty loops cannot initialize an outer local', () => {
   assert.throws(() => validate(source('n: int; for(i=0:2:+) { n=i; } print(n);')), /before it is initialized/);
   validate(source('n: int; while(true) { n=3; break; } print(n);'));
-  assert.throws(() => validate(source('', 'f(b: boolean) -> int { n: int; while(true) { if(b) { break; } n=1; break; } return n; }')), /before it is initialized/);
+  assert.throws(() => validate(source('', 'f(b: bool) -> int { n: int; while(true) { if(b) { break; } n=1; break; } return n; }')), /before it is initialized/);
 });
 test('initialization: short circuiting preserves conditional assignment', () => {
-  assert.throws(() => validate(source('', 'f(b: boolean) -> void { n: int; print(b && (n=1)==1); print(n); }')), /before it is initialized/);
-  validate(source('', 'f(b: boolean) -> void { n: int; if(b && (n=1)==1) { print(n); } }'));
+  assert.throws(() => validate(source('', 'f(b: bool) -> void { n: int; print(b && (n=1)==1); print(n); }')), /before it is initialized/);
+  validate(source('', 'f(b: bool) -> void { n: int; if(b && (n=1)==1) { print(n); } }'));
   validate(source('n: int; print(true && (n=1)==1); print(n);'));
 });
 test('initialization: field order, constructors and early returns', () => {
   assert.throws(() => validate(source('', 'a: int = b; b: int = 1;')), /before it is initialized/);
   assert.throws(() => validate(source('', 'a: int;')), /every constructor path/);
-  assert.throws(() => validate(source('', 'a: int; Main(b: boolean) { if(b) { return; } a=1; }')), /every constructor path/);
-  validate(source('', 'a: int; Main(b: boolean) { if(b) { a=1; } else { a=2; } }'));
+  assert.throws(() => validate(source('', 'a: int; Main(b: bool) { if(b) { return; } a=1; }')), /every constructor path/);
+  validate(source('', 'a: int; Main(b: bool) { if(b) { a=1; } else { a=2; } }'));
   validate(source('', 'a: int = 1; b: int = a+1;'));
 });
 test('initialization: partially constructed me cannot escape or call methods', () => {

@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { tokenize, KoleError } from '../src/lexer.mjs';
 import { parse } from '../src/parser.mjs';
 import { Runtime } from '../src/runtime.mjs';
+import { number } from '../src/numbers.mjs';
 
 // These regression tests deliberately exercise runtime defenses without preflight.
 // Static checks and the public run API are covered in checker.test.mjs.
@@ -86,10 +87,10 @@ test('while loops and compound assignment', () => {
   assert.deepEqual(execute('int n = 0; while(n<3) { print(n); n += 1; }'), ['0', '1', '2']);
 });
 test('booleans, arithmetic errors and overflow are explicit', () => {
-  assert.throws(() => execute('if(1) {}'), /boolean/);
+  assert.throws(() => execute('if(1) {}'), /bool/);
   assert.throws(() => execute('print(2/0);'), /Division by zero/);
-  assert.throws(() => execute('int n = 2147483647; n++;'), /Expected int/);
-  assert.throws(() => execute('int n = 3/2;'), /Expected int/);
+  assert.throws(() => execute('int n = 2147483647; n++;'), /int overflow/);
+  assert.deepEqual(execute('int n = 3/2; print(n);'), ['1']);
 });
 
 const connection = `class Connection {
@@ -114,7 +115,7 @@ test('failed transition preserves state; successful early return commits it', ()
   const call = name => runtime.invoke({ cls, self: object, method: cls.methods.get(name) }, [], cls.declaration);
   assert.throws(() => call('open'), /Precondition failed/);
   assert.equal(object.fields.get('status').value.name, 'CLOSED');
-  object.fields.get('attempts').value = 1;
+  object.fields.get('attempts').value = number('int', 1);
   call('open'); assert.equal(object.fields.get('status').value.name, 'OPEN');
   call('close'); assert.equal(object.fields.get('status').value.name, 'CLOSED');
   assert.equal(object.transitioning, false);
@@ -148,7 +149,7 @@ test('execution and call depth limits produce language errors', () => {
 });
 test('entrypoint arguments and array reads', () => {
   const output = [];
-  run('class Main { public static void main(String[] args) { print(args.length, args[0]); } }', 'Main', { args: ['kole'], print: line => output.push(line) });
+  run('class Main { public static void main(string[] args) { print(args.length, args[0]); } }', 'Main', { args: ['kole'], print: line => output.push(line) });
   assert.deepEqual(output, ['1 kole']);
 });
 test('recursive field initialization produces a language error', () => {

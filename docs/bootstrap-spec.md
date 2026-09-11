@@ -1,6 +1,6 @@
 # kole bootstrap specification
 
-Status: executable prototype, version 0.3.0. This document distinguishes implemented behavior from future language goals. `.k`, `name: Type`, `method() -> Type`, `me`, and the explicit `for(i=0:10:+)` form are settled requirements; endpoint and counter rules below are provisional implementation decisions. See [requirements](requirements.md) for the full roadmap and [objects and safety](objects-and-safety.md) for the four new milestones.
+Status: executable prototype, version 0.4.0. This document distinguishes implemented behavior from future goals. `.k`, `name: Type`, `method() -> Type`, `me`, and `for(i=0:10:+)` are settled requirements; loop endpoint/counter rules remain provisional. See [requirements](requirements.md), [objects and safety](objects-and-safety.md), and [values and collections](values-and-collections.md).
 
 ## Execution model
 
@@ -8,7 +8,7 @@ The lexer produces tokens with source locations. The parser builds an abstract s
 
 The implementation is hosted by Node.js for bootstrapping. It is not yet a native executable or a machine-code compiler. It does not use JavaScript `eval` or `Function` to execute source programs.
 
-Each source file is self-contained and may contain multiple classes. The entry class matches the file's base name and provides `public static main() -> void` or `public static main(args: String[]) -> void`. Omitted member visibility defaults to public. Classes have one optional constructor named after the class, such as `Point(x: int, y: int) { ... }`, without a return arrow. Constructor and method overloading are not supported. Fields, locals, and parameters use `name: Type`. Legacy type-first declarations remain temporarily accepted for bootstrap compatibility.
+Each source file is self-contained and may contain multiple classes. The entry class matches the file's base name and provides `public static main() -> void` or `public static main(args: string[]) -> void`. Omitted member visibility defaults to public. Classes have one optional constructor named after the class, such as `Point(x: int, y: int) { ... }`, without a return arrow. Constructor and method overloading are not supported. Fields, locals, and parameters use `name: Type`. Legacy type-first declarations remain temporarily accepted for bootstrap compatibility.
 
 ## Objects and values
 
@@ -16,13 +16,13 @@ Fields belong to individual objects. Methods can access their own private fields
 
 Variables, fields, parameters, and returns carry declared types. The checker validates names, member access, assignments, call arguments, operators, condition types, and return types and paths before execution. Enum types retain their declaring class identity. Definite assignment checks local reads and requires fields to be initialized on all successful constructor paths. Runtime type and uninitialized-read checks remain as a backstop, including for aliases outside the intraprocedural analysis.
 
-Supported value types are signed 32-bit `int`, finite numeric `double`, `boolean`, `String`, declared classes, interfaces, and enums declared within a class. Array type annotations are parsed, but array creation and mutation are not implemented; the command-line argument array can be read. All types are non-null by default. `Type?` explicitly permits null. Locals and parameters narrow after null guards; nullable field values must be copied to a local snapshot before narrowing. Nullable declarations still require initialization.
+Supported types include signed integer widths byte/short/int/long, binary32 float, Unicode scalar char, bool, string, classes, interfaces, enums, mutable fixed-length arrays, and List<A>. The old names boolean, String, and double are rejected. All types are non-null by default; Type? permits null. Locals and parameters narrow after null guards; nullable fields need local snapshots. Nullable declarations still require initialization.
 
 Single-object `owns` fields enforce at most one owning slot per child. Matching `belongsTo` references are nullable, read-only, automatically initialized, and maintained on attach, detach, replacement, and transfer. Cycles and duplicate ownership are runtime errors. See [relationship rules](objects-and-safety.md#4-ownership-and-relationships) for validation and construction-failure behavior. Ownership does not free objects or prohibit ordinary aliases.
 
-Arithmetic uses the host's finite numeric representation. Integer literals have static type `int`; decimal literals such as `2.0` have type `double`. `int` can widen to `double`; implicit narrowing is rejected. `/` has static type `double` and performs fractional division, so even assigning `4 / 2` to an `int` is rejected statically. Integer range checks occur at runtime on typed assignment, argument passing, return, and loop bounds; intermediate numeric expressions are not a final specification of integer overflow behavior. Division by zero is an error. Boolean operators require booleans and short circuit at runtime, although the checker inspects both operands. Equality compares compatible scalar values and object identity. String concatenation uses `+` when either operand has type String.
+Integer arithmetic is exact and range-checked on every intermediate result. byte/short arithmetic promotes to int; long and float take precedence as defined in the numeric specification. Integer division truncates toward zero; float division is fractional. Division by zero and overflow are errors. Explicit conversions and checked compound updates handle narrowing. Float arithmetic rounds to binary32. Boolean operators require bool and short circuit at runtime; the checker inspects both operands. Equality compares compatible scalar values and object identity. String concatenation uses + when either operand is string.
 
-`print(a, b)` writes one line with arguments separated by spaces. String literals support `\n`, `\r`, `\t`, `\"`, and `\\`. Comments use `//` or `/* ... */`.
+`print(a, b)` writes one line with arguments separated by spaces. String and char literals support escaped whitespace, quotes, backslash, null characters, and Unicode scalar escapes. String indices count Unicode scalars and return char. Comments use // or /* ... */.
 
 ## Range loops
 
@@ -50,7 +50,7 @@ class Connection {
     private state status: State = CLOSED;
 
     public open() -> void transitions CLOSED -> OPEN { }
-    public send(message: String) -> void requires OPEN {
+    public send(message: string) -> void requires OPEN {
         require message.length > 0;
         print(message);
     }
@@ -63,7 +63,7 @@ One lifecycle field is permitted per class. It must be private, initialized, and
 
 Direct assignment to a lifecycle field is forbidden, even within its class. Reentrant transitions on the same object are rejected. Separate aliases refer to the same instance and see the same state.
 
-`require condition;` raises a source-located error if the boolean condition is false. A failed method does not commit its target lifecycle state. Earlier ordinary field mutations and printed output are not rolled back. These are not atomic transactions, and there is no concurrency support yet.
+`require condition;` raises a source-located error if the bool condition is false. A failed method does not commit its target lifecycle state. Earlier ordinary field mutations and printed output are not rolled back. These are not atomic transactions, and there is no concurrency support yet.
 
 ## Diagnostics and limits
 
@@ -73,4 +73,4 @@ CLI language errors use `file.k:line:column: message` and exit with status 1. Us
 
 ## Not implemented
 
-Ownership collections and explicit inverse selection, atomic blocks, type inference, interprocedural initialization analysis, static lifecycle analysis, immutable-by-default values, data classes, properties, sealed types/pattern matching, generics, inheritance, interface default methods/inheritance, exceptions with user-defined throw/catch, modules, collection libraries, custom loop steps, concurrency, optional memory control, and native code generation. They must not be inferred from the broader design sketches in the README.
+Ownership collections and explicit inverse selection, atomic blocks, general variable type inference, interprocedural initialization analysis, static lifecycle analysis, immutable-by-default values, data classes, properties, sealed types/pattern matching, user-defined generics, inheritance, interface default methods/inheritance, user-defined exceptions, modules, maps/sets/iterators, custom loop steps, concurrency, optional memory control, and native code generation. Array-literal element inference and built-in List<A> are implemented.

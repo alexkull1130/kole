@@ -6,7 +6,7 @@ public class Connection {
         print("Opening connection");
     }
 
-    public send(message: String) -> void requires OPEN {
+    public send(message: string) -> void requires OPEN {
         require message.length > 0;
         print("Sending:", message);
     }

@@ -1,10 +1,10 @@
 class Label {
-    private text: String;
-    public Label(short: boolean) {
+    private text: string;
+    public Label(short: bool) {
         if(short) { me.text = "kole"; }
         else { me.text = "The kole programming language"; }
     }
-    public describe() -> String { return text; }
+    public describe() -> string { return text; }
 }
 
 class Initialization {

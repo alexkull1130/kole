@@ -1,5 +1,5 @@
 public class Hello {
-    public static main(args: String[]) -> void {
+    public static main(args: string[]) -> void {
         print("Hello from kole!");
         for(i=0:5:+) {
             print("up", i);

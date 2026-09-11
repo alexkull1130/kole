@@ -1,6 +1,6 @@
-# Objects and safety in kole 0.3
+# Objects and safety in kole
 
-This release implements the next four milestones in order: definite assignment, interfaces, null safety, and single-object ownership relationships. The prototype still runs on Node.js. Standalone native distribution remains a separate requirement.
+These rules were introduced in 0.3. Examples now use the 0.4 names bool and string. See [values and collections](values-and-collections.md) for primitives, arrays, and List<A>. The prototype still uses Node.js; standalone native distribution remains separate work.
 
 ## Current object: me
 
@@ -19,7 +19,7 @@ class Point {
 Every local must receive a value before it is read, updated, or passed to a call. A declaration without an initializer is allowed, but a subsequent assignment must be guaranteed on the path to each read.
 
 ```text
-name: String;
+name: string;
 if(short) { name = "kole"; }
 else { name = "The kole language"; }
 print(name);
@@ -39,11 +39,11 @@ Try `kole run examples/Initialization.k`.
 
 ```text
 interface Printable {
-    public describe() -> String;
+    public describe() -> string;
 }
 
 class Label implements Printable {
-    public describe() -> String { return "kole"; }
+    public describe() -> string { return "kole"; }
 }
 ```
 
@@ -57,10 +57,10 @@ Try `kole run examples/Interfaces.k`.
 
 ## 3. Null safety
 
-Types are non-null by default. Add `?` to allow null: `String?`, `Customer?`, `Printable?`, and `int?` are valid. Null is rejected when assigned or passed to a non-null type. There is no implicit default initialization of nullable locals or ordinary fields.
+Types are non-null by default. Add `?` to allow null: `string?`, `Customer?`, `Printable?`, and `int?` are valid. Null is rejected when assigned or passed to a non-null type. There is no implicit default initialization of nullable locals or ordinary fields.
 
 ```text
-public greet(name: String?) -> void {
+public greet(name: string?) -> void {
     if(name == null) { print("Hello, stranger"); return; }
     print(name.length);
 }
@@ -75,7 +75,7 @@ owner: Notebook? = me.notebook;
 if(owner != null) { print(owner.name); }
 ```
 
-Nullable values cannot be dereferenced, indexed, or used in numeric/boolean operations until narrowed. Printing null and comparing to null are allowed. `String[]?` means a nullable array of non-null strings; `String?[]` means a non-null array with nullable elements. Array construction and mutation are still not implemented. There is no non-null assertion, optional chaining, or null-coalescing operator yet.
+Nullable values cannot be dereferenced, indexed, or used in numeric/bool operations until narrowed. Printing null and comparing to null are allowed. string[]? means a nullable array of non-null strings; string?[] means a non-null array with nullable elements. Arrays and Lists support typed construction and mutation in 0.4. There is no non-null assertion, optional chaining, or null-coalescing operator yet.
 
 Runtime type checks enforce these null rules too. Overflow, bounds errors, and lifecycle guards remain separate runtime concerns.
 
@@ -95,7 +95,7 @@ class Notebook {
 }
 ```
 
-This first version supports single-object fields with concrete class types. Collections, interface-typed ownership, and named inverse selection are not implemented.
+This first version supports single-object fields with concrete class types. Ownership of collections, interface-typed ownership, and named inverse selection are not implemented.
 
 - `owns` marks an owning field. It may be non-null or nullable, and normal initialization and access rules apply.
 - An object has at most one owning field across all owners and slots. Ordinary aliases remain legal.

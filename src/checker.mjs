@@ -1,8 +1,9 @@
 import { KoleError } from './lexer.mjs';
 import { checkInitialization } from './initialization.mjs';
+import { primitiveTypes, isNumeric, promoted, widens, fitsLiteral } from './numbers.mjs';
 
 const value = type => ({ kind: 'value', type });
-const numeric = type => type === 'int' || type === 'double';
+const numeric = isNumeric;
 
 class Scope {
   constructor(parent, owner = parent?.owner, instance = parent?.instance) {
@@ -26,6 +27,7 @@ class Checker {
     this.runtime.validateType(name, owner, node);
     if (name.endsWith('?')) return this.type(name.slice(0, -1), owner, node) + '?';
     if (name.endsWith('[]')) return this.type(name.slice(0, -2), owner, node) + '[]';
+    if (name.startsWith('List<') && name.endsWith('>')) return `List<${this.type(name.slice(5, -1), owner, node)}>`;
     if (owner.enums.has(name)) return `${owner.name}.${name}`;
     return name;
   }
@@ -36,12 +38,12 @@ class Checker {
   assignable(expected, actual) {
     if (expected.endsWith('?')) return actual === 'null' || this.assignable(expected.slice(0, -1), actual.endsWith('?') ? actual.slice(0, -1) : actual);
     if (actual === 'null' || actual.endsWith('?')) return expected === actual;
-    return expected === actual || (expected === 'double' && actual === 'int') ||
+    return expected === actual || widens(expected, actual) ||
       (this.classes.get(actual)?.interfaces.has(expected) ?? false);
   }
   expect(expected, info, node) {
     const actual = this.requireValue(info, node);
-    if (!this.assignable(expected, actual)) this.fail(node, `Expected ${expected}, received ${actual}`);
+    if (!this.assignable(expected, actual) && !fitsLiteral(expected.replace(/\?$/, ''), info.constant)) this.fail(node, `Expected ${expected}, received ${actual}`);
   }
   access(member, cls, scope, node) {
     this.runtime.access(member, cls, scope, node);
@@ -57,7 +59,13 @@ class Checker {
   }
   member(object, name, scope, node) {
     if (object.kind === 'value' && (object.type === 'null' || object.type.endsWith('?'))) this.fail(node, `Cannot access '${name}' on nullable ${object.type}; check a local value against null first`);
-    if (object.kind === 'value' && (object.type === 'String' || object.type.endsWith('[]')) && name === 'length') return value('int');
+    if (object.kind === 'value' && (object.type === 'string' || object.type.endsWith('[]') || object.type.startsWith('List<')) && name === 'length') return value('int');
+    if (object.kind === 'value' && object.type.startsWith('List<')) {
+      const A = object.type.slice(5, -1);
+      const signatures = { add: [[A], 'void'], get: [['int'], A], set: [['int', A], 'void'], removeAt: [['int'], A], clear: [[], 'void'], isEmpty: [[], 'bool'] };
+      if (signatures[name]) return { kind: 'listMethod', name, params: signatures[name][0], returns: signatures[name][1] };
+      this.fail(node, `Unknown member '${name}' on ${object.type}`);
+    }
     if (object.kind === 'enum') {
       if (!object.enum.values.has(name)) this.fail(node, `Unknown enum value '${name}'`);
       return value(`${object.cls.name}.${object.enum.name}`);
@@ -92,6 +100,7 @@ class Checker {
     if (scope.owner.methods.has(name)) return this.member(scope.instance ? value(scope.owner.name) : { kind: 'class', cls: scope.owner }, name, scope, node);
     if (this.classes.has(name)) return { kind: 'class', cls: this.classes.get(name) };
     if (name === 'print') return { kind: 'print' };
+    if (primitiveTypes.includes(name)) return { kind: 'conversion', type: name };
     this.fail(node, `Unknown name '${name}'`);
   }
   target(node, scope) {
@@ -101,42 +110,50 @@ class Checker {
   }
   arguments(method, cls, args, scope, node) {
     if (args.length !== method.params.length) this.fail(node, `${method.name} expects ${method.params.length} arguments, got ${args.length}`);
-    method.params.forEach((param, i) => this.expect(this.type(param.type, cls, param), this.expression(args[i], scope), args[i]));
+    method.params.forEach((param, i) => {
+      const type = this.type(param.type, cls, param);
+      this.expect(type, this.expression(args[i], scope, type), args[i]);
+    });
   }
   binary(op, left, right, node) {
     const a = this.requireValue(left, node), b = this.requireValue(right, node);
     if (op === '==' || op === '!=') {
-      if (a === 'null' || b === 'null') return value('boolean');
+      if (a === 'null' || b === 'null') return value('bool');
       if (!this.assignable(a, b) && !this.assignable(b, a)) this.fail(node, `Cannot compare ${a} with ${b}`);
-      return value('boolean');
+      return value('bool');
     }
     if (op === '&&' || op === '||') {
-      this.expect('boolean', left, node); this.expect('boolean', right, node); return value('boolean');
+      this.expect('bool', left, node); this.expect('bool', right, node); return value('bool');
     }
-    if (op === '+' && (a === 'String' || b === 'String')) return value('String');
+    if (op === '+' && (a === 'string' || b === 'string')) return value('string');
+    if (a === 'char' && b === 'char' && ['<', '>', '<=', '>='].includes(op)) return value('bool');
     if (!numeric(a) || !numeric(b)) this.fail(node, `Operator '${op}' requires numeric operands, received ${a} and ${b}`);
-    if (['<', '>', '<=', '>='].includes(op)) return value('boolean');
-    return value(op === '/' || a === 'double' || b === 'double' ? 'double' : 'int');
+    if (['<', '>', '<=', '>='].includes(op)) return value('bool');
+    return value(promoted(a, b));
   }
-  expression(node, scope) {
+  expression(node, scope, expectedType = null) {
     switch (node.kind) {
-      case 'literal': return value(node.value === null ? 'null' : typeof node.value === 'string' ? 'String' : typeof node.value === 'boolean' ? 'boolean' : node.token.text.includes('.') ? 'double' : 'int');
+      case 'literal': {
+        if (node.value?.kind === 'number') return { ...value(node.value.type), constant: node.value };
+        return value(node.value === null ? 'null' : node.value?.kind === 'char' ? 'char' : typeof node.value === 'string' ? 'string' : 'bool');
+      }
       case 'name': return this.name(node.name, scope, node);
       case 'member': return this.member(this.expression(node.object, scope), node.name, scope, node);
       case 'index': {
         const object = this.requireValue(this.expression(node.object, scope), node.object);
         if (object.endsWith('?') || object === 'null') this.fail(node, 'Cannot index a nullable value; check a local value against null first');
         this.expect('int', this.expression(node.index, scope), node.index);
-        if (object === 'String') return value('String');
-        if (object.endsWith('[]')) return value(object.slice(0, -2));
-        this.fail(node, 'Indexing requires an array or String');
+        if (object === 'string') return value('char');
+        if (object.endsWith('[]')) return { ...value(object.slice(0, -2)), writable: true };
+        if (object.startsWith('List<')) return { ...value(object.slice(5, -1)), writable: true };
+        this.fail(node, 'Indexing requires an array, List, or string');
         break;
       }
       case 'unary': {
         const operand = this.expression(node.value, scope);
-        if (node.op === '!') { this.expect('boolean', operand, node); return value('boolean'); }
+        if (node.op === '!') { this.expect('bool', operand, node); return value('bool'); }
         if (!numeric(this.requireValue(operand, node))) this.fail(node, `Operator '${node.op}' requires a number`);
-        return value(operand.type);
+        return value(promoted(operand.type));
       }
       case 'binary': {
         const left = this.expression(node.left, scope);
@@ -150,8 +167,9 @@ class Checker {
         return this.binary(node.op, left, this.expression(node.right, scope), node);
       }
       case 'assign': {
-        const target = this.target(node.left, scope), right = this.expression(node.right, scope);
-        this.expect(target.type, node.op === '=' ? right : this.binary(node.op[0], value(target.readType), right, node), node);
+        const target = this.target(node.left, scope), right = this.expression(node.right, scope, node.op === '=' ? target.type : null);
+        const result = node.op === '=' ? right : this.binary(node.op[0], value(target.readType), right, node);
+        if (!(node.op !== '=' && numeric(target.readType) && numeric(result.type))) this.expect(target.type, result, node);
         if (target.binding) {
           scope.facts.delete(target.binding);
           if (target.type.endsWith('?') && right.kind === 'value' && right.type !== 'null' && !right.type.endsWith('?')) scope.facts.set(target.binding, target.type.slice(0, -1));
@@ -172,9 +190,53 @@ class Checker {
         else if (node.args.length) this.fail(node, `${cls.name} has no constructor accepting arguments`);
         return value(cls.name);
       }
+      case 'newArray': {
+        const element = this.type(node.elementType, scope.owner, node);
+        this.expect('int', this.expression(node.size, scope), node.size);
+        this.runtime.defaultValue(element, node);
+        return value(element + '[]');
+      }
+      case 'newList': {
+        const type = this.type(node.name, scope.owner, node);
+        if (node.args.length) this.fail(node, 'List<A>() takes no constructor arguments');
+        return value(type);
+      }
+      case 'array': {
+        const expected = expectedType?.replace(/\?$/, '');
+        let element = expected?.endsWith('[]') ? expected.slice(0, -2) : null;
+        const infos = node.items.map(item => this.expression(item, scope, element));
+        if (!element) {
+          if (!infos.length) this.fail(node, 'Empty array literals require a declared element type');
+          element = this.requireValue(infos[0], node.items[0]);
+          for (let i = 1; i < infos.length; i++) {
+            const next = this.requireValue(infos[i], node.items[i]);
+            if (element === 'null' && next !== 'null') element = next.endsWith('?') ? next : next + '?';
+            else if (next === 'null' && element !== 'null') element = element.endsWith('?') ? element : element + '?';
+            else if (this.assignable(next, element)) element = next;
+            else if (!this.assignable(element, next)) this.fail(node, 'Array elements need a common type or a declared element type');
+          }
+          if (element === 'null') this.fail(node, 'An all-null array requires a declared element type');
+        }
+        infos.forEach((info, i) => this.expect(element, info, node.items[i]));
+        node.resolvedElementType = element;
+        return value(element + '[]');
+      }
       case 'call': {
         const callee = this.expression(node.callee, scope);
         if (callee.kind === 'print') { node.args.forEach(arg => this.requireValue(this.expression(arg, scope), arg)); return value('void'); }
+        if (callee.kind === 'conversion') {
+          if (node.args.length !== 1) this.fail(node, `${callee.type} conversion expects one argument`);
+          const type = this.requireValue(this.expression(node.args[0], scope), node.args[0]);
+          const valid = callee.type === 'string' || (numeric(callee.type) && (numeric(type) || type === 'char')) ||
+            (callee.type === 'char' && (['char', 'string'].includes(type) || (numeric(type) && type !== 'float'))) || (callee.type === 'bool' && type === 'bool');
+          if (!valid) this.fail(node, `Cannot convert ${type} to ${callee.type}`);
+          return value(callee.type);
+        }
+        if (callee.kind === 'listMethod') {
+          if (node.args.length !== callee.params.length) this.fail(node, `List.${callee.name} expects ${callee.params.length} arguments`);
+          callee.params.forEach((type, i) => this.expect(type, this.expression(node.args[i], scope, type), node.args[i]));
+          return value(callee.returns);
+        }
         if (callee.kind !== 'method') this.fail(node, 'Value is not callable');
         this.arguments(callee.method, callee.cls, node.args, scope, node);
         return value(callee.method.type === 'void' ? 'void' : this.type(callee.method.type, callee.cls, callee.method));
@@ -228,23 +290,23 @@ class Checker {
       }
       case 'declare': {
         const type = this.type(node.type, scope.owner, node);
-        const initial = node.value ? this.expression(node.value, scope) : null;
+        const initial = node.value ? this.expression(node.value, scope, type) : null;
         if (initial) this.expect(type, initial, node.value);
         const binding = this.declare(scope, node.name, type, node);
         if (type.endsWith('?') && initial && initial.type !== 'null' && !initial.type.endsWith('?')) scope.facts.set(binding, type.slice(0, -1));
         break;
       }
       case 'expression': this.expression(node.expression, scope); break;
-      case 'require': this.expect('boolean', this.expression(node.condition, scope), node.condition); this.refine(node.condition, true, scope); break;
+      case 'require': this.expect('bool', this.expression(node.condition, scope), node.condition); this.refine(node.condition, true, scope); break;
       case 'return': {
         if (returnType === 'void') { if (node.value) this.fail(node, 'A void method cannot return a value'); }
         else if (!node.value) this.fail(node, `Expected return value of type ${returnType}`);
-        else this.expect(returnType, this.expression(node.value, scope), node.value);
+        else this.expect(returnType, this.expression(node.value, scope, returnType), node.value);
         return new Set(['return']);
       }
       case 'break': case 'continue': return new Set([node.kind]);
       case 'if': {
-        this.expect('boolean', this.expression(node.condition, scope), node.condition);
+        this.expect('bool', this.expression(node.condition, scope), node.condition);
         const yesScope = new Scope(scope), noScope = new Scope(scope);
         this.refine(node.condition, true, yesScope); this.refine(node.condition, false, noScope);
         const yes = this.statement(node.yes, yesScope, returnType);
@@ -263,7 +325,7 @@ class Checker {
       }
       case 'while': {
         this.killLoopFacts(node, scope);
-        this.expect('boolean', this.expression(node.condition, scope), node.condition);
+        this.expect('bool', this.expression(node.condition, scope), node.condition);
         const local = new Scope(scope); this.refine(node.condition, true, local);
         const paths = this.statement(node.body, local, returnType);
         this.killLoopFacts(node.body, scope);
@@ -280,7 +342,10 @@ class Checker {
       if (cls.kind === 'interface') continue;
       const fields = new Scope(null, cls, true);
       for (const field of cls.fields.values()) {
-        if (field.init) this.expect(this.type(field.type, cls, field), this.expression(field.init, fields), field.init);
+        if (field.init) {
+          const type = this.type(field.type, cls, field);
+          this.expect(type, this.expression(field.init, fields, type), field.init);
+        }
       }
       for (const method of cls.methods.values()) {
         const scope = new Scope(null, cls, !method.isStatic);

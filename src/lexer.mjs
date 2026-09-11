@@ -29,22 +29,31 @@ export function tokenize(source) {
       if (pos === source.length) throw new KoleError('Unterminated comment', token);
       advance(); advance(); continue;
     }
-    if (c === '"') {
+    if (c === '"' || c === "'") {
+      const quote = c;
       advance();
       let value = '';
-      while (pos < source.length && source[pos] !== '"') {
+      while (pos < source.length && source[pos] !== quote) {
         let next = advance();
         if (next === '\n' || next === '\r') throw new KoleError('Unterminated string', token);
         if (next === '\\') {
           const escape = advance();
-          const escapes = { n: '\n', r: '\r', t: '\t', '"': '"', '\\': '\\' };
-          if (!Object.hasOwn(escapes, escape)) throw new KoleError('Unsupported string escape', token);
-          next = escapes[escape];
+          const escapes = { n: '\n', r: '\r', t: '\t', '0': '\0', '"': '"', "'": "'", '\\': '\\' };
+          if (escape === 'u' && source[pos] === '{') {
+            advance(); let hex = '';
+            while (pos < source.length && /[0-9a-fA-F]/.test(source[pos])) hex += advance();
+            const point = parseInt(hex, 16);
+            if (source[pos] !== '}' || !hex.length || hex.length > 6 || point > 0x10ffff || (point >= 0xd800 && point <= 0xdfff)) throw new KoleError('Invalid Unicode scalar escape', token);
+            advance(); next = String.fromCodePoint(point);
+          } else {
+            if (!Object.hasOwn(escapes, escape)) throw new KoleError('Unsupported string escape', token);
+            next = escapes[escape];
+          }
         }
         value += next;
       }
       if (pos === source.length) throw new KoleError('Unterminated string', token);
-      advance(); tokens.push({ ...token, kind: 'string', text: value }); continue;
+      advance(); tokens.push({ ...token, kind: quote === "'" ? 'char' : 'string', text: value }); continue;
     }
     if (/[0-9]/.test(c)) {
       let text = '';
@@ -53,6 +62,13 @@ export function tokenize(source) {
         text += advance();
         while (pos < source.length && /[0-9]/.test(source[pos])) text += advance();
       }
+      if (/[eE]/.test(source[pos] ?? '')) {
+        text += advance();
+        if (/[+-]/.test(source[pos] ?? '')) text += advance();
+        if (!/[0-9]/.test(source[pos] ?? '')) throw new KoleError('Exponent requires digits', token);
+        while (pos < source.length && /[0-9]/.test(source[pos])) text += advance();
+      }
+      if (/[lLfF]/.test(source[pos] ?? '')) text += advance();
       tokens.push({ ...token, kind: 'number', text }); continue;
     }
     if (/[A-Za-z_]/.test(c)) {

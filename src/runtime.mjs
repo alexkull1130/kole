@@ -1,6 +1,7 @@
 import { KoleError } from './lexer.mjs';
 import { parse } from './parser.mjs';
 import { check } from './checker.mjs';
+import { primitiveTypes, isNumeric, number, widens, fitsLiteral, convertNumber, convertChar, makeChar, binaryNumber, unaryNumber, numericText } from './numbers.mjs';
 
 const UNSET = Symbol('uninitialized');
 class Flow { constructor(kind, value) { this.kind = kind; this.value = value; } }
@@ -15,7 +16,7 @@ export class Runtime {
   constructor(program, { print = console.log, maxSteps = 1_000_000 } = {}) {
     this.classes = new Map(); this.print = print; this.steps = 0; this.maxSteps = maxSteps; this.depth = 0;
     for (const declaration of program.classes) {
-      if (this.classes.has(declaration.name) || ['int', 'double', 'boolean', 'String', 'void', 'print'].includes(declaration.name)) this.fail(declaration, `Duplicate or reserved class '${declaration.name}'`);
+      if (this.classes.has(declaration.name) || [...primitiveTypes, 'boolean', 'String', 'double', 'List', 'void', 'print'].includes(declaration.name)) this.fail(declaration, `Duplicate or reserved class '${declaration.name}'`);
       this.classes.set(declaration.name, { kind: declaration.isInterface ? 'interface' : 'class', name: declaration.name, fields: new Map(), methods: new Map(), enums: new Map(), declaration, lifecycle: null, interfaces: new Set(declaration.interfaces ?? []) });
     }
     for (const cls of this.classes.values()) {
@@ -32,7 +33,7 @@ export class Runtime {
             cls.lifecycle = m;
           }
         } else if (m.kind === 'enum') {
-          if (this.classes.has(m.name) || ['int', 'double', 'boolean', 'String', 'void'].includes(m.name)) this.fail(m, `Enum name '${m.name}' conflicts with a type name`);
+          if (this.classes.has(m.name) || [...primitiveTypes, 'List', 'void'].includes(m.name)) this.fail(m, `Enum name '${m.name}' conflicts with a type name`);
           if (new Set(m.values).size !== m.values.length) this.fail(m, 'Duplicate enum state');
           const values = new Map(m.values.map(name => [name, { kind: 'enumValue', owner: cls.name, type: m.name, name }]));
           cls.enums.set(m.name, { kind: 'enum', owner: cls.name, name: m.name, values, declaration: m });
@@ -92,40 +93,121 @@ export class Runtime {
   validateType(type, owner, node) {
     if (type.endsWith('?')) return this.validateType(type.slice(0, -1), owner, node);
     if (type.endsWith('[]')) return this.validateType(type.slice(0, -2), owner, node);
-    if (!['int', 'double', 'boolean', 'String'].includes(type) && !this.classes.has(type) && !owner?.enums.has(type)) this.fail(node, `Unknown type '${type}'`);
+    if (type.startsWith('List<') && type.endsWith('>')) return this.validateType(type.slice(5, -1), owner, node);
+    const parts = type.split('.');
+    if (parts.length === 2 && this.classes.get(parts[0])?.enums.has(parts[1])) return;
+    if (!primitiveTypes.includes(type) && !this.classes.has(type) && !owner?.enums.has(type)) this.fail(node, `Unknown type '${type}'`);
+  }
+  typeKey(type, owner) {
+    if (type.endsWith('?')) return this.typeKey(type.slice(0, -1), owner) + '?';
+    if (type.endsWith('[]')) return this.typeKey(type.slice(0, -2), owner) + '[]';
+    if (type.startsWith('List<') && type.endsWith('>')) return `List<${this.typeKey(type.slice(5, -1), owner)}>`;
+    return owner?.enums.has(type) ? `${owner.name}.${type}` : type;
   }
   checkType(type, value, owner, node) {
     this.validateType(type, owner, node);
     if (type.endsWith('?')) return value === null ? null : this.checkType(type.slice(0, -1), value, owner, node);
     let valid;
-    if (type.endsWith('[]')) {
-      valid = Array.isArray(value);
-      if (valid) for (const item of value) this.checkType(type.slice(0, -2), item, owner, node);
-    } else if (type === 'int') valid = Number.isSafeInteger(value) && value >= -2147483648 && value <= 2147483647;
-    else if (type === 'double') valid = typeof value === 'number' && Number.isFinite(value);
-    else if (type === 'boolean') valid = typeof value === 'boolean';
-    else if (type === 'String') valid = typeof value === 'string';
-    else if (owner?.enums.has(type)) valid = value?.kind === 'enumValue' && value.owner === owner.name && value.type === type;
+    if (type.endsWith('[]')) valid = value?.kind === 'array' && value.type === this.typeKey(type, owner);
+    else if (type.startsWith('List<')) valid = value?.kind === 'list' && value.type === this.typeKey(type, owner);
+    else if (isNumeric(type)) {
+      if (value?.kind === 'number' && (widens(type, value.type) || fitsLiteral(type, value))) return convertNumber(type, value, node);
+      valid = false;
+    }
+    else if (type === 'bool') valid = typeof value === 'boolean';
+    else if (type === 'string') valid = typeof value === 'string';
+    else if (type === 'char') valid = value?.kind === 'char';
+    else if (owner?.enums.has(type) || type.includes('.')) valid = value?.kind === 'enumValue' && `${value.owner}.${value.type}` === this.typeKey(type, owner);
     else valid = value?.kind === 'instance' && (value.cls.name === type || value.cls.interfaces.has(type));
     if (!valid) this.fail(node, `Expected ${type}, received ${this.format(value)}`);
     return value;
   }
-  bool(value, node) { if (typeof value !== 'boolean') this.fail(node, 'Condition must be boolean'); return value; }
-  number(value, node) { if (typeof value !== 'number' || !Number.isFinite(value)) this.fail(node, 'Expected a finite number'); return value; }
-  format(value) {
+  bool(value, node) { if (typeof value !== 'boolean') this.fail(node, 'Condition must be bool'); return value; }
+  index(value, node) {
+    const checked = this.checkType('int', value, null, node);
+    return Number(checked.value);
+  }
+  format(value, seen = new Set()) {
     if (value === null) return 'null';
     if (value === undefined) return 'void';
     if (value === UNSET) return '<uninitialized>';
+    if (value?.kind === 'number') return numericText(value);
+    if (value?.kind === 'char') return value.value;
     if (value?.kind === 'enumValue') return `${value.type}.${value.name}`;
     if (value?.kind === 'instance') return `<${value.cls.name}>`;
-    if (Array.isArray(value)) return `[${value.map(v => this.format(v)).join(', ')}]`;
+    if (value?.kind === 'array' || value?.kind === 'list') {
+      if (seen.has(value)) return '[...]';
+      seen.add(value); const text = `[${value.items.map(item => this.format(item, seen)).join(', ')}]`; seen.delete(value); return text;
+    }
     if (typeof value === 'object') return `<${value.kind}>`;
     return String(value);
+  }
+  collectionSize(size, node) {
+    if (!Number.isInteger(size) || size < 0 || size > 100000) this.fail(node, 'Collection length must be between 0 and 100000');
+  }
+  collection(kind, elementType, items, owner, node) {
+    this.validateType(elementType, owner, node); this.collectionSize(items.length, node);
+    elementType = this.typeKey(elementType, owner);
+    return { kind, elementType, type: kind === 'array' ? elementType + '[]' : `List<${elementType}>`, owner,
+      items: items.map(item => this.checkType(elementType, item, owner, node)) };
+  }
+  defaultValue(type, node) {
+    if (type.endsWith('?')) return null;
+    if (isNumeric(type)) return number(type, 0, node);
+    if (type === 'bool') return false;
+    if (type === 'string') return '';
+    if (type === 'char') return makeChar('\0', node);
+    this.fail(node, `No default value for ${type}; use an array literal or nullable elements`);
+  }
+  bounds(items, index, node) {
+    if (index < 0 || index >= items.length) this.fail(node, `Index ${index} out of bounds for length ${items.length}`);
+  }
+  runtimeType(value) {
+    if (value === null) return 'null';
+    if (typeof value === 'string') return 'string';
+    if (typeof value === 'boolean') return 'bool';
+    if (value?.kind === 'number' || value?.kind === 'array' || value?.kind === 'list') return value.type;
+    if (value?.kind === 'char') return 'char';
+    if (value?.kind === 'instance') return value.cls.name;
+    if (value?.kind === 'enumValue') return `${value.owner}.${value.type}`;
+    return 'void';
+  }
+  inferArrayType(items, node) {
+    if (!items.length) this.fail(node, 'Empty array literals require a declared element type');
+    let type = this.runtimeType(items[0]);
+    for (const item of items.slice(1)) {
+      const next = this.runtimeType(item);
+      if (widens(next, type)) type = next;
+      else if (next !== type && !widens(type, next)) this.fail(node, 'Array elements need a common type');
+    }
+    return type;
+  }
+  convert(type, args, node) {
+    if (args.length !== 1) this.fail(node, `${type} conversion expects one argument`);
+    if (isNumeric(type)) return convertNumber(type, args[0], node);
+    if (type === 'char') return convertChar(args[0], node);
+    if (type === 'string') return this.format(args[0]);
+    if (type === 'bool') return this.bool(args[0], node);
+    this.fail(node, `Unknown conversion ${type}`);
+  }
+  callList({ object, name }, args, node) {
+    const arity = { add: 1, get: 1, set: 2, removeAt: 1, clear: 0, isEmpty: 0 }[name];
+    if (args.length !== arity) this.fail(node, `List.${name} expects ${arity} arguments`);
+    if (name === 'clear') { object.items.length = 0; return undefined; }
+    if (name === 'isEmpty') return object.items.length === 0;
+    if (name === 'add') {
+      const item = this.checkType(object.elementType, args[0], object.owner, node);
+      this.collectionSize(object.items.length + 1, node); object.items.push(item); return undefined;
+    }
+    const index = this.index(args[0], node); this.bounds(object.items, index, node);
+    if (name === 'get') return object.items[index];
+    if (name === 'removeAt') return object.items.splice(index, 1)[0];
+    object.items[index] = this.checkType(object.elementType, args[1], object.owner, node); return undefined;
   }
   declare(scope, name, type, value, node, readonly = false) {
     if (scope.bindings.has(name)) this.fail(node, `Variable '${name}' is already declared in this scope`);
     this.validateType(type, scope.owner, node);
-    if (value !== UNSET) this.checkType(type, value, scope.owner, node);
+    if (value !== UNSET) value = this.checkType(type, value, scope.owner, node);
     const binding = { type, value, owner: scope.owner, readonly };
     scope.bindings.set(name, binding); return binding;
   }
@@ -144,7 +226,11 @@ export class Runtime {
     return object.fields.get(name);
   }
   member(object, name, scope, node) {
-    if ((typeof object === 'string' || Array.isArray(object)) && name === 'length') return object.length;
+    if (typeof object === 'string' && name === 'length') return number('int', [...object].length, node);
+    if (object?.kind === 'array' || object?.kind === 'list') {
+      if (name === 'length') return number('int', object.items.length, node);
+      if (object.kind === 'list' && ['add', 'get', 'set', 'removeAt', 'clear', 'isEmpty'].includes(name)) return { kind: 'listMethod', object, name };
+    }
     if (object?.kind === 'enum') {
       if (!object.values.has(name)) this.fail(node, `Unknown enum value '${name}'`);
       return object.values.get(name);
@@ -175,6 +261,7 @@ export class Runtime {
     if (scope.owner?.methods.has(name)) return this.member(scope.self ?? scope.owner, name, scope, node);
     if (this.classes.has(name)) return this.classes.get(name);
     if (name === 'print') return { kind: 'print' };
+    if (primitiveTypes.includes(name)) return { kind: 'conversion', type: name };
     this.fail(node, `Unknown name '${name}'`);
   }
   reference(node, scope) {
@@ -183,6 +270,12 @@ export class Runtime {
       binding = scope.find(node.name);
       if (!binding && scope.self) binding = this.field(scope.self, node.name, scope, node);
     } else if (node.kind === 'member') binding = this.field(this.eval(node.object, scope), node.name, scope, node);
+    else if (node.kind === 'index') {
+      const collection = this.eval(node.object, scope), index = this.index(this.eval(node.index, scope), node);
+      if (!['array', 'list'].includes(collection?.kind)) this.fail(node, 'Only arrays and Lists support indexed assignment');
+      this.bounds(collection.items, index, node);
+      binding = { type: collection.elementType, owner: collection.owner, value: collection.items[index], collection, index };
+    }
     if (!binding) this.fail(node, 'Unknown assignment target');
     if (binding.readonly) this.fail(node, 'Cannot assign to a loop counter, lifecycle field, or belongsTo reference directly');
     return binding;
@@ -194,7 +287,11 @@ export class Runtime {
     if (binding.definition.inverse) previous.fields.get(binding.definition.inverse).value = null;
   }
   write(binding, value, node) {
-    this.checkType(binding.type, value, binding.owner, node);
+    value = this.checkType(binding.type, value, binding.owner, node);
+    if (binding.collection) {
+      this.bounds(binding.collection.items, binding.index, node);
+      binding.collection.items[binding.index] = value; return value;
+    }
     if (binding.definition?.relationship === 'owns') {
       if (value !== null) {
         if (value.ownerSlot && value.ownerSlot !== binding) this.fail(node, 'Object already has an owner; detach it before assigning a new owner');
@@ -214,19 +311,14 @@ export class Runtime {
     return value;
   }
   binary(op, a, b, node) {
+    if (a?.kind === 'number' && b?.kind === 'number') return binaryNumber(op, a, b, node);
+    if (a?.kind === 'char' && b?.kind === 'char' && ['==', '!=', '<', '>', '<=', '>='].includes(op)) {
+      return binaryNumber(op, number('int', a.value.codePointAt(0), node), number('int', b.value.codePointAt(0), node), node);
+    }
     if (op === '==') return a === b;
     if (op === '!=') return a !== b;
     if (op === '+' && (typeof a === 'string' || typeof b === 'string')) return this.format(a) + this.format(b);
-    this.number(a, node); this.number(b, node);
-    if ((op === '/' || op === '%') && b === 0) this.fail(node, 'Division by zero');
-    let value;
-    switch (op) {
-      case '+': value = a + b; break; case '-': value = a - b; break;
-      case '*': value = a * b; break; case '/': value = a / b; break; case '%': value = a % b; break;
-      case '<': return a < b; case '>': return a > b; case '<=': return a <= b; case '>=': return a >= b;
-      default: this.fail(node, `Unknown operator '${op}'`);
-    }
-    return this.number(value, node);
+    this.fail(node, `Operator '${op}' requires numeric operands`);
   }
   eval(node, scope) {
     this.tick(node);
@@ -235,14 +327,16 @@ export class Runtime {
       case 'name': return this.resolve(node.name, scope, node);
       case 'member': return this.member(this.eval(node.object, scope), node.name, scope, node);
       case 'index': {
-        const object = this.eval(node.object, scope), index = this.eval(node.index, scope);
-        if (!(Array.isArray(object) || typeof object === 'string') || !Number.isInteger(index) || index < 0 || index >= object.length) this.fail(node, 'Invalid index or index out of bounds');
-        return object[index];
+        const object = this.eval(node.object, scope), index = this.index(this.eval(node.index, scope), node);
+        const items = typeof object === 'string' ? [...object] : ['array', 'list'].includes(object?.kind) ? object.items : null;
+        if (!items) this.fail(node, 'Indexing requires an array, List, or string');
+        this.bounds(items, index, node);
+        return typeof object === 'string' ? makeChar(items[index], node) : items[index];
       }
       case 'unary': {
         const value = this.eval(node.value, scope);
         if (node.op === '!') return !this.bool(value, node);
-        return node.op === '-' ? -this.number(value, node) : this.number(value, node);
+        return unaryNumber(node.op, value, node);
       }
       case 'binary': {
         const left = this.eval(node.left, scope);
@@ -254,17 +348,34 @@ export class Runtime {
         const binding = this.reference(node.left, scope);
         const previous = node.op === '=' ? undefined : this.read(binding, node);
         const right = this.eval(node.right, scope);
-        const value = node.op === '=' ? right : this.binary(node.op[0], previous, right, node);
+        let value = node.op === '=' ? right : this.binary(node.op[0], previous, right, node);
+        if (node.op !== '=' && isNumeric(binding.type.replace(/\?$/, ''))) value = convertNumber(binding.type.replace(/\?$/, ''), value, node);
         return this.write(binding, value, node);
       }
       case 'update': {
         const binding = this.reference(node.value, scope), previous = this.read(binding, node);
-        binding.value = this.checkType(binding.type, this.number(previous, node) + node.step, binding.owner, node); return previous;
+        const updated = this.binary('+', previous, number('int', node.step, node), node);
+        this.write(binding, convertNumber(binding.type.replace(/\?$/, ''), updated, node), node); return previous;
       }
       case 'new': return this.create(node.name, node.args.map(arg => this.eval(arg, scope)), scope, node);
+      case 'array': {
+        const items = node.items.map(item => this.eval(item, scope));
+        return this.collection('array', node.resolvedElementType ?? this.inferArrayType(items, node), items, scope.owner, node);
+      }
+      case 'newArray': {
+        const size = this.index(this.eval(node.size, scope), node); this.collectionSize(size, node);
+        const initial = this.defaultValue(node.elementType, node);
+        return this.collection('array', node.elementType, Array(size).fill(initial), scope.owner, node);
+      }
+      case 'newList': {
+        if (node.args.length) this.fail(node, 'List<A>() takes no constructor arguments');
+        return this.collection('list', node.name.slice(5, -1), [], scope.owner, node);
+      }
       case 'call': {
         const callee = this.eval(node.callee, scope), args = node.args.map(arg => this.eval(arg, scope));
         if (callee?.kind === 'print') { this.print(args.map(value => this.format(value)).join(' ')); return undefined; }
+        if (callee?.kind === 'conversion') return this.convert(callee.type, args, node);
+        if (callee?.kind === 'listMethod') return this.callList(callee, args, node);
         if (callee?.kind !== 'method') this.fail(node, 'Value is not callable');
         return this.invoke(callee, args, node);
       }
@@ -290,11 +401,11 @@ export class Runtime {
         break;
       }
       case 'for': {
-        const start = this.checkType('int', this.eval(node.start, scope), scope.owner, node);
-        const end = this.checkType('int', this.eval(node.end, scope), scope.owner, node);
-        const local = new Scope(scope), counter = this.declare(local, node.name, 'int', start, node, true);
+        const start = this.index(this.eval(node.start, scope), node);
+        const end = this.index(this.eval(node.end, scope), node);
+        const local = new Scope(scope), counter = this.declare(local, node.name, 'int', number('int', start, node), node, true);
         for (let i = start; node.step > 0 ? i < end : i > end; i += node.step) {
-          this.tick(node); counter.value = i;
+          this.tick(node); counter.value = number('int', i, node);
           if (this.loopBody(node.body, local) === 'break') break;
         }
         break;
@@ -350,7 +461,7 @@ export class Runtime {
       try { this.statement(method.body, scope); }
       catch (flow) { if (!(flow instanceof Flow) || flow.kind !== 'return') throw flow; value = flow.value; }
       if (method.type === 'void') { if (value !== undefined) this.fail(method, 'A void method cannot return a value'); }
-      else this.checkType(method.type, value, cls, method);
+      else value = this.checkType(method.type, value, cls, method);
       if (method.to) self.fields.get(cls.lifecycle.name).value = cls.enums.get(cls.lifecycle.type).values.get(method.to);
       return value;
     } finally { this.depth--; if (transitionStarted) self.transitioning = false; }
@@ -359,9 +470,9 @@ export class Runtime {
     const cls = this.classes.get(entry);
     if (!cls) this.fail(null, `Entry class '${entry}' was not found`);
     const method = cls.methods.get('main');
-    if (!method || !method.isStatic || method.access !== 'public' || method.type !== 'void') this.fail(cls.declaration, 'Entry requires public static main() -> void or main(args: String[]) -> void');
-    if (method.params.length > 1 || (method.params.length === 1 && method.params[0].type !== 'String[]')) this.fail(method, 'main accepts either no parameters or args: String[]');
-    return this.invoke({ cls, self: null, method }, method.params.length ? [args] : [], method);
+    if (!method || !method.isStatic || method.access !== 'public' || method.type !== 'void') this.fail(cls.declaration, 'Entry requires public static main() -> void or main(args: string[]) -> void');
+    if (method.params.length > 1 || (method.params.length === 1 && method.params[0].type !== 'string[]')) this.fail(method, 'main accepts either no parameters or args: string[]');
+    return this.invoke({ cls, self: null, method }, method.params.length ? [this.collection('array', 'string', args, cls, method)] : [], method);
   }
 }
 

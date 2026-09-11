@@ -19,7 +19,7 @@ public class Connection {
 
     public open() -> void transitions CLOSED -> OPEN { }
 
-    public send(message: String) -> void requires OPEN {
+    public send(message: string) -> void requires OPEN {
         require message.length > 0;
         print(message);
     }
@@ -38,6 +38,8 @@ public class Connection {
 - Range loops use **`for(i=0:10:+)`** and **`for(i=10:0:-)`**. Counters are explicit; there is no implicit `i`.
 - Words such as `requires` and `transitions` describe lifecycle behavior.
 - **`me`** refers to the current object; `this` is no longer accepted.
+- Primitive names are **byte, short, int, long, float, char, bool, and string**. Do not introduce double; boolean and String are removed names.
+- Use **A** as the generic parameter name, as in **List<A>**.
 - Endpoint exclusion, read-only loop counters, and unit steps are current provisional rules; custom steps remain a design question.
 - Earlier type-first bootstrap syntax is temporarily accepted for compatibility. All maintained examples use the new syntax.
 
@@ -50,7 +52,9 @@ public class Connection {
 | Interfaces | Implemented: nominal adoption, multiple contracts, exact signature checks, and dynamic dispatch |
 | Inheritance | Planned |
 | Initialization checking | Implemented for local control flow, field initialization order, and successful constructor paths; runtime alias checks retained |
-| Generics and exceptions | Planned; no user-defined throw/catch yet |
+| Primitive numeric system | Implemented: checked widths, exact long, binary32 float, conversions, and integral division |
+| Arrays and first collection | Implemented: fixed-length mutable arrays and List<A> |
+| User-defined generics and exceptions | Planned; built-in List<A> is supported, but no user-defined generics or throw/catch yet |
 | Lifecycles and valid state transitions | Runtime guards and transitions implemented; compile-time state analysis planned |
 | Ownership and object relationships | Implemented for single concrete objects: one owning slot, optional managed back-reference, duplicate/cycle checks, detach/transfer |
 | Contracts | `require` preconditions implemented; postconditions and invariants planned |
@@ -91,6 +95,7 @@ It is implemented and intentionally omitted from ordinary CLI usage text. It req
 3. **Done:** definite-assignment analysis and constructor initialization checking.
 4. **Done:** interfaces; inheritance remains planned.
 5. **Done:** null safety followed by single-object ownership and automatic back-references.
-6. Expand contracts, value features, optional memory control, and concurrency after their interaction rules are specified.
+6. **Done:** renamed types, expanded primitives, defined arithmetic/conversions, and added arrays plus List<A>.
+7. Expand contracts, value features, optional memory control, and concurrency after their interaction rules are specified.
 
-The precise rules and limits are in [objects and safety](objects-and-safety.md). Static checking now covers initialization and nullable access within the documented model. Lifecycle correctness, ownership conflicts/cycles, initialization through arbitrary aliases/callbacks, overflow, and index safety still use runtime checks. Checks do not execute user code and report the first error with a `.k` source location.
+The precise rules are in [objects and safety](objects-and-safety.md) and [values and collections](values-and-collections.md). Lifecycle correctness, ownership conflicts/cycles, initialization through arbitrary aliases/callbacks, overflow, and index safety retain runtime checks. Static checks do not execute user code and report the first error with a .k source location.

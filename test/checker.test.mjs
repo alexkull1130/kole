@@ -32,7 +32,7 @@ test('canonical methods require return arrows and constructors do not take them'
   assert.throws(() => parse('class A { f: int() -> void {} }'), /Methods use/);
 });
 test('uninvoked methods and dead branches are checked', () => {
-  assert.throws(() => validate(main('', 'bad() -> void { n: int = "wrong"; }')), /Expected int, received String/);
+  assert.throws(() => validate(main('', 'bad() -> void { n: int = "wrong"; }')), /Expected int, received string/);
   assert.throws(() => validate(main('if(false) { print(missing); }')), /Unknown name 'missing'/);
   assert.throws(() => validate(main('return; print(missing);')), /Unknown name 'missing'/);
 });
@@ -60,8 +60,8 @@ test('return types and missing return paths are checked', () => {
   assert.throws(() => validate(main('', 'f() -> int { return "bad"; }')), /Expected int/);
   assert.throws(() => validate(main('', 'f() -> int { return; }')), /Expected return value/);
   assert.throws(() => validate(main('', 'f() -> void { return 1; }')), /void method/);
-  assert.throws(() => validate(main('', 'f(b: boolean) -> int { if(b) { return 1; } }')), /may finish without returning/);
-  validate(main('', 'f(b: boolean) -> int { if(b) { return 1; } else { return 2; } }'));
+  assert.throws(() => validate(main('', 'f(b: bool) -> int { if(b) { return 1; } }')), /may finish without returning/);
+  validate(main('', 'f(b: bool) -> int { if(b) { return 1; } else { return 2; } }'));
 });
 test('return analysis accounts for loop breaks and potentially empty ranges', () => {
   assert.throws(() => validate(main('', 'f() -> int { for(i=0:3:+) { return i; } }')), /may finish/);
@@ -71,10 +71,10 @@ test('return analysis accounts for loop breaks and potentially empty ranges', ()
 test('scope lookup and duplicate locals are checked', () => {
   assert.throws(() => validate(main('for(i=0:3:+) {} print(i);')), /Unknown name/);
   assert.throws(() => validate(main('n: int = 0; n: int = 1;')), /already declared/);
-  validate(main('n: int = 0; { n: String = "inner"; print(n); } print(n);'));
+  validate(main('n: int = 0; { n: string = "inner"; print(n); } print(n);'));
 });
 test('conditions and loop bounds require their declared types', () => {
-  for (const body of ['if(1) {}', 'while("yes") {}', 'require 1;']) assert.throws(() => validate(main(body)), /Expected boolean/);
+  for (const body of ['if(1) {}', 'while("yes") {}', 'require 1;']) assert.throws(() => validate(main(body)), /Expected bool/);
   assert.throws(() => validate(main('for(i=0:3.5:+) {}')), /Expected int/);
   assert.throws(() => validate(main('for(i=0:3:+) { i++; }')), /Cannot assign/);
 });
@@ -90,9 +90,10 @@ test('static methods cannot use me or invoke instance methods through a class', 
   assert.throws(() => validate(main('Main.f();', 'f() -> void {}')), /needs an instance/);
 });
 test('numeric promotion, string concatenation and division have defined types', () => {
-  validate(main('d: double = 2; text: String = "n=" + d; print(text);'));
-  assert.throws(() => validate(main('n: int = 4/2;')), /Expected int, received double/);
-  assert.throws(() => validate(main('n: int = 2.0;')), /Expected int, received double/);
+  validate(main('d: float = 2; text: string = "n=" + d; print(text);'));
+  validate(main('n: int = 4/2;'));
+  assert.throws(() => validate(main('n: int = 4.0/2;')), /Expected int, received float/);
+  assert.throws(() => validate(main('n: int = 2.0;')), /Expected int, received float/);
   assert.throws(() => validate(main('print(true+1);')), /numeric operands/);
   assert.throws(() => validate(main('print(1=="1");')), /Cannot compare/);
 });
@@ -102,7 +103,7 @@ test('void results, classes and methods cannot be used as ordinary values', () =
   assert.throws(() => validate(main('print(Main.main);')), /Expected a value/);
 });
 test('array and string index types and length are checked', () => {
-  validate('class Main { static main(args: String[]) -> void { print(args.length, args[0], "kole"[0]); } }');
+  validate('class Main { static main(args: string[]) -> void { print(args.length, args[0], "kole"[0]); } }');
   assert.throws(() => validate(main('print("kole"[false]);')), /Expected int/);
   assert.throws(() => validate(main('print(42[0]);')), /Indexing requires/);
 });
@@ -111,7 +112,7 @@ test('enum types retain their declaring class identity', () => {
   assert.throws(() => validate(source + main('o: Other = new Other(); stateValue: State = o.get();', 'enum State { A }')), /Expected Main.State, received Other.State/);
 });
 test('canonical lifecycle syntax checks and runs with runtime state guards', () => {
-  const members = 'enum State { CLOSED, OPEN } private state status: State = CLOSED; open() -> void transitions CLOSED -> OPEN {} send(text: String) -> void requires OPEN { require text.length > 0; print(text); }';
+  const members = 'enum State { CLOSED, OPEN } private state status: State = CLOSED; open() -> void transitions CLOSED -> OPEN {} send(text: string) -> void requires OPEN { require text.length > 0; print(text); }';
   const output = [];
   run(main('m: Main = new Main(); m.open(); m.send("hello");', members), 'Main', { print: line => output.push(line) });
   assert.deepEqual(output, ['hello']);
@@ -132,7 +133,7 @@ test('CLI checks invalid unused code, returns source positions and hides Easter 
     for (const command of ['check', 'run']) {
       const result = spawnSync(process.execPath, [cliPath, command, file], { encoding: 'utf8' });
       assert.equal(result.status, 1); assert.equal(result.stdout, '');
-      assert.match(result.stderr, /Main\.k:2:\d+: Expected int, received String/);
+      assert.match(result.stderr, /Main\.k:2:\d+: Expected int, received string/);
     }
     const egg = spawnSync(process.execPath, [cliPath, 'alex'], { encoding: 'utf8' });
     assert.equal(egg.status, 0); assert.equal(egg.stdout.trim(), 'Every language starts with a name.\nThis one started with Alex Kull.');
