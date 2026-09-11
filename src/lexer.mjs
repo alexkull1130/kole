@@ -64,7 +64,7 @@ export function tokenize(source) {
     if (['->', '==', '!=', '<=', '>=', '&&', '||', '+=', '-=', '++', '--'].includes(pair)) {
       advance(); advance(); tokens.push({ ...token, kind: 'symbol', text: pair }); continue;
     }
-    if ('{}()[];,:.=+-*/%!<>'.includes(c)) {
+    if ('{}()[];,:.=+-*/%!<>?'.includes(c)) {
       tokens.push({ ...token, kind: 'symbol', text: advance() }); continue;
     }
     throw new KoleError(`Unexpected character '${c}'`, token);

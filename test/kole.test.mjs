@@ -62,7 +62,7 @@ test('lexer and parser report source locations', () => {
   assert.throws(() => parse('class Main { void f() {'), /Unclosed block/);
 });
 test('objects, constructors, methods and independent instance fields', () => {
-  assert.deepEqual(execute('Main a = new Main(2); Main b = new Main(7); a.bump(); print(a.get(), b.get());', 'private int value; public Main(int value) { this.value = value; } public void bump() { value++; } public int get() { return value; }'), ['3 7']);
+  assert.deepEqual(execute('Main a = new Main(2); Main b = new Main(7); a.bump(); print(a.get(), b.get());', 'private int value; public Main(int value) { me.value = value; } public void bump() { value++; } public int get() { return value; }'), ['3 7']);
 });
 test('private fields and methods reject external callers', () => {
   const prefix = 'class Secret { private int x = 1; private int get() { return x; } }';
@@ -139,8 +139,8 @@ test('duplicate classes, members and parameters fail', () => {
   assert.throws(() => new Runtime(parse('class X { int x; int x; }')), /Duplicate/);
   assert.throws(() => new Runtime(parse('class X { void f(int x, int x) {} }')), /Duplicate/);
 });
-test('unsupported ownership is diagnosed instead of silently ignored', () => {
-  assert.throws(() => parse('class X { private owns X child; }'), /planned but not implemented/);
+test('unsupported atomic blocks are diagnosed instead of silently ignored', () => {
+  assert.throws(() => parse('class X { private atomic X child; }'), /planned but not implemented/);
 });
 test('execution and call depth limits produce language errors', () => {
   assert.throws(() => run('class Main { static void main() { while(true) {} } }', 'Main', { maxSteps: 50 }), /step limit/);

@@ -7,7 +7,7 @@ This is the working record of the language direction agreed with Alex Kull. Feat
 - Name: **kole**. Source extension: **`.k`**.
 - An independent, object-oriented language inspired by Java's principles.
 - Its own grammar, type system, object model, and runtime; no Java or JVM dependency.
-- The current prototype uses Node.js to host an interpreter. Native execution is a future implementation decision.
+- Standalone native distribution without a separate Node/Java/Python installation is a requirement. The current prototype still uses Node.js; replacing that host is separate work.
 - Familiar classes and encapsulation, combined with distinctive syntax, explicit relationships, lifecycles, and contracts.
 
 ## Accepted syntax
@@ -37,6 +37,7 @@ public class Connection {
 - Constructors retain the class name, use `name: Type` parameters, and have no return arrow.
 - Range loops use **`for(i=0:10:+)`** and **`for(i=10:0:-)`**. Counters are explicit; there is no implicit `i`.
 - Words such as `requires` and `transitions` describe lifecycle behavior.
+- **`me`** refers to the current object; `this` is no longer accepted.
 - Endpoint exclusion, read-only loop counters, and unit steps are current provisional rules; custom steps remain a design question.
 - Earlier type-first bootstrap syntax is temporarily accepted for compatibility. All maintained examples use the new syntax.
 
@@ -46,12 +47,14 @@ public class Connection {
 | --- | --- |
 | Classes, constructors, instance/static methods, encapsulation | Implemented for the bootstrap subset |
 | Static typing | Initial checker implemented: all bodies, names, members, calls, assignments, returns, access, and operators; runtime checks retained |
-| Interfaces and inheritance/composition | Planned; detailed semantics to be decided |
+| Interfaces | Implemented: nominal adoption, multiple contracts, exact signature checks, and dynamic dispatch |
+| Inheritance | Planned |
+| Initialization checking | Implemented for local control flow, field initialization order, and successful constructor paths; runtime alias checks retained |
 | Generics and exceptions | Planned; no user-defined throw/catch yet |
 | Lifecycles and valid state transitions | Runtime guards and transitions implemented; compile-time state analysis planned |
-| Ownership and object relationships | Planned; `owns` and `belongsTo` must have defined semantics before support |
+| Ownership and object relationships | Implemented for single concrete objects: one owning slot, optional managed back-reference, duplicate/cycle checks, detach/transfer |
 | Contracts | `require` preconditions implemented; postconditions and invariants planned |
-| Non-null types by default and `Type?` | Planned |
+| Non-null types by default and `Type?` | Implemented, with local/parameter narrowing; fields require local snapshots |
 | Immutable values by default | Planned; distinguish immutable bindings from immutable objects |
 | Data classes | Planned constructors, equality, and readable printing |
 | Properties with controlled access | Planned |
@@ -85,9 +88,9 @@ It is implemented and intentionally omitted from ordinary CLI usage text. It req
 
 1. **Done:** first direct interpreter, examples, runtime guards, and loop behavior.
 2. **Done:** accepted syntax, Easter egg, and initial static checking before `check` and `run`.
-3. **Next:** definite-assignment analysis and stronger constructor initialization checks. Uninitialized reads still fail at runtime today.
-4. Design and implement interfaces and the inheritance/composition model.
-5. Introduce null safety, then ownership and relationship semantics.
+3. **Done:** definite-assignment analysis and constructor initialization checking.
+4. **Done:** interfaces; inheritance remains planned.
+5. **Done:** null safety followed by single-object ownership and automatic back-references.
 6. Expand contracts, value features, optional memory control, and concurrency after their interaction rules are specified.
 
-Static checking currently does not prove lifecycle correctness, initialization, absence of null dereferences, arithmetic overflow, or index safety. It checks declarations and types without executing user code and reports the first error with a `.k` source location.
+The precise rules and limits are in [objects and safety](objects-and-safety.md). Static checking now covers initialization and nullable access within the documented model. Lifecycle correctness, ownership conflicts/cycles, initialization through arbitrary aliases/callbacks, overflow, and index safety still use runtime checks. Checks do not execute user code and report the first error with a `.k` source location.

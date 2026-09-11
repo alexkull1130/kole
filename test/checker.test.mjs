@@ -17,7 +17,7 @@ function validate(source) {
 const main = (body, members = '') => `class Main { ${members} public static main() -> void { ${body} } }`;
 
 test('canonical syntax supports fields, parameters, locals, constructors and returns', () => {
-  const source = main('a: Main = new Main(4); print(a.twice());', 'private count: int; public Main(count: int) { this.count = count; } public twice() -> int { return count*2; }');
+  const source = main('a: Main = new Main(4); print(a.twice());', 'private count: int; public Main(count: int) { me.count = count; } public twice() -> int { return count*2; }');
   validate(source);
   const output = [];
   run(source, 'Main', { print: line => output.push(line) });
@@ -85,8 +85,8 @@ test('private members and constructors cannot be used by other classes', () => {
   }
   assert.throws(() => validate('class Secret { private Secret() {} }' + main('s: Secret = new Secret();')), /private/);
 });
-test('static methods cannot use this or invoke instance methods through a class', () => {
-  assert.throws(() => validate(main('print(this);')), /this is unavailable/);
+test('static methods cannot use me or invoke instance methods through a class', () => {
+  assert.throws(() => validate(main('print(me);')), /me is unavailable/);
   assert.throws(() => validate(main('Main.f();', 'f() -> void {}')), /needs an instance/);
 });
 test('numeric promotion, string concatenation and division have defined types', () => {

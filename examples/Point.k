@@ -3,8 +3,8 @@ public class Point {
     private y: int;
 
     public Point(x: int, y: int) {
-        this.x = x;
-        this.y = y;
+        me.x = x;
+        me.y = y;
     }
 
     public squaredDistance() -> int {

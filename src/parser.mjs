@@ -1,6 +1,6 @@
 import { KoleError, tokenize } from './lexer.mjs';
 
-const reserved = new Set(['class', 'public', 'private', 'static', 'enum', 'state', 'requires', 'transitions', 'require', 'if', 'else', 'while', 'for', 'return', 'break', 'continue', 'new', 'this', 'true', 'false', 'null', 'owns', 'belongsTo', 'atomic']);
+const reserved = new Set(['class', 'interface', 'implements', 'public', 'private', 'static', 'enum', 'state', 'requires', 'transitions', 'require', 'if', 'else', 'while', 'for', 'return', 'break', 'continue', 'new', 'me', 'this', 'true', 'false', 'null', 'owns', 'belongsTo', 'atomic']);
 const precedence = { '=': 1, '+=': 1, '-=': 1, '||': 2, '&&': 3, '==': 4, '!=': 4, '<': 5, '>': 5, '<=': 5, '>=': 5, '+': 6, '-': 6, '*': 7, '/': 7, '%': 7 };
 
 export function parse(source) { return new Parser(tokenize(source)).program(); }
@@ -22,7 +22,13 @@ class Parser {
   }
   type() {
     let type = this.name();
-    while (this.match('[')) { this.expect(']'); type += '[]'; }
+    while (true) {
+      if (this.match('[')) { this.expect(']'); type += '[]'; }
+      else if (this.match('?')) {
+        if (type.endsWith('?')) throw new KoleError('A type cannot have repeated nullable markers', this.peek());
+        type += '?';
+      } else break;
+    }
     return type;
   }
   modifiers() {
@@ -44,13 +50,17 @@ class Parser {
   }
   classDecl() {
     const token = this.peek();
-    this.match('public'); this.expect('class');
+    this.match('public'); const isInterface = !!this.match('interface');
+    if (!isInterface) this.expect('class');
     const name = this.name();
+    const interfaces = [];
+    if (!isInterface && this.match('implements')) do { interfaces.push(this.name()); } while (this.match(','));
     this.expect('{');
     const members = [];
     while (!this.at('}')) {
       const token = this.peek(), modifiers = this.modifiers();
       if (this.match('enum')) {
+        if (isInterface) throw new KoleError('Interfaces contain method signatures only', token);
         const name = this.name(), values = [];
         this.expect('{');
         do { values.push(this.name()); } while (this.match(',') && !this.at('}'));
@@ -58,7 +68,9 @@ class Parser {
         members.push({ kind: 'enum', name, values, token, ...modifiers }); continue;
       }
       const lifecycle = !!this.match('state');
-      if (['owns', 'belongsTo', 'atomic'].some(v => this.at(v))) throw new KoleError(`'${this.peek().text}' is planned but not implemented`, this.peek());
+      const relationship = this.match('owns') ? 'owns' : this.match('belongsTo') ? 'belongsTo' : null;
+      if (lifecycle && relationship) throw new KoleError('A lifecycle field cannot also be a relationship', token);
+      if (this.at('atomic')) throw new KoleError("'atomic' is planned but not implemented", this.peek());
       const modern = this.peek(1).text === ':' || this.peek(1).text === '(';
       let type, memberName, constructor = false;
       if (modern) {
@@ -71,7 +83,7 @@ class Parser {
       }
       if (this.match('(')) {
         if (modern && type && !constructor) throw new KoleError('Methods use name(parameters) -> Type, not name: Type(parameters)', token);
-        if (lifecycle) throw new KoleError('state applies to fields only', token);
+        if (lifecycle || relationship) throw new KoleError('state, owns, and belongsTo apply to fields only', token);
         const params = [];
         if (!this.at(')')) do {
           const token = this.peek();
@@ -89,17 +101,22 @@ class Parser {
         if (to && type !== 'void') throw new KoleError('Transition methods must return void', token);
         if (from && (modifiers.isStatic || constructor)) throw new KoleError('Lifecycle clauses require an instance method', token);
         if (constructor && modifiers.isStatic) throw new KoleError('A constructor cannot be static', token);
-        const body = this.block();
+        let body;
+        if (isInterface) {
+          if (constructor || modifiers.isStatic || modifiers.access !== 'public' || from) throw new KoleError('Interface methods must be public instance signatures without lifecycle restrictions', token);
+          this.expect(';'); body = null;
+        } else body = this.block();
         members.push({ kind: 'method', name: memberName, type, params, body, from, to, constructor, token, ...modifiers });
       } else {
+        if (isInterface) throw new KoleError('Interfaces contain method signatures only', token);
         if (modifiers.isStatic) throw new KoleError('Static fields are not implemented yet', token);
         const init = this.match('=') ? this.expression() : null;
         this.expect(';');
-        members.push({ kind: 'field', name: memberName, type, init, lifecycle, token, ...modifiers });
+        members.push({ kind: 'field', name: memberName, type, init, lifecycle, relationship, token, ...modifiers });
       }
     }
     this.expect('}');
-    return { name, members, token };
+    return { name, members, token, isInterface, interfaces };
   }
   block() {
     const token = this.expect('{'), statements = [];
@@ -151,7 +168,11 @@ class Parser {
     }
     // A declaration begins with a type name (optionally array brackets) and a name.
     let look = 1;
-    while (this.peek(look).text === '[' && this.peek(look + 1).text === ']') look += 2;
+    while (true) {
+      if (this.peek(look).text === '[' && this.peek(look + 1).text === ']') look += 2;
+      else if (this.peek(look).text === '?') look++;
+      else break;
+    }
     if (token.kind === 'identifier' && !reserved.has(token.text) && this.peek(look).kind === 'identifier') {
       const type = this.type(), name = this.name();
       const value = this.match('=') ? this.expression() : null;
@@ -201,7 +222,8 @@ class Parser {
     if (this.match('null')) return { kind: 'literal', value: null, token };
     if (this.match('new')) { const name = this.name(); this.expect('('); return { kind: 'new', name, args: this.arguments(), token }; }
     if (this.match('(')) { const value = this.expression(); this.expect(')'); return value; }
-    if (this.match('this')) return { kind: 'name', name: 'this', token };
+    if (this.match('me')) return { kind: 'name', name: 'me', token };
+    if (this.at('this')) throw new KoleError("Use 'me' for the current object in kole", token);
     if (token.kind === 'identifier') return { kind: 'name', name: this.name(), token };
     throw new KoleError(`Expected an expression, found '${token.text}'`, token);
   }

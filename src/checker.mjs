@@ -1,4 +1,5 @@
 import { KoleError } from './lexer.mjs';
+import { checkInitialization } from './initialization.mjs';
 
 const value = type => ({ kind: 'value', type });
 const numeric = type => type === 'int' || type === 'double';
@@ -6,6 +7,7 @@ const numeric = type => type === 'int' || type === 'double';
 class Scope {
   constructor(parent, owner = parent?.owner, instance = parent?.instance) {
     this.parent = parent; this.owner = owner; this.instance = instance; this.locals = new Map();
+    this.facts = new Map(parent?.facts);
   }
   find(name) { return this.locals.get(name) ?? this.parent?.find(name); }
 }
@@ -13,6 +15,7 @@ class Scope {
 /** Checks every body without executing user code. Runtime owns the class registry. */
 export function check(program, runtime) {
   new Checker(runtime).program(program);
+  checkInitialization(runtime);
   return program;
 }
 
@@ -21,6 +24,7 @@ class Checker {
   fail(node, message) { throw new KoleError(message, node.token ?? node); }
   type(name, owner, node) {
     this.runtime.validateType(name, owner, node);
+    if (name.endsWith('?')) return this.type(name.slice(0, -1), owner, node) + '?';
     if (name.endsWith('[]')) return this.type(name.slice(0, -2), owner, node) + '[]';
     if (owner.enums.has(name)) return `${owner.name}.${name}`;
     return name;
@@ -30,8 +34,10 @@ class Checker {
     return info.type;
   }
   assignable(expected, actual) {
+    if (expected.endsWith('?')) return actual === 'null' || this.assignable(expected.slice(0, -1), actual.endsWith('?') ? actual.slice(0, -1) : actual);
+    if (actual === 'null' || actual.endsWith('?')) return expected === actual;
     return expected === actual || (expected === 'double' && actual === 'int') ||
-      (actual === 'null' && (expected === 'String' || this.classes.has(expected)));
+      (this.classes.get(actual)?.interfaces.has(expected) ?? false);
   }
   expect(expected, info, node) {
     const actual = this.requireValue(info, node);
@@ -47,9 +53,10 @@ class Checker {
   }
   field(cls, field, scope, node) {
     this.access(field, cls, scope, node);
-    return { ...value(this.type(field.type, cls, field)), writable: !field.lifecycle };
+    return { ...value(this.type(field.type, cls, field)), writable: !field.lifecycle && field.relationship !== 'belongsTo' };
   }
   member(object, name, scope, node) {
+    if (object.kind === 'value' && (object.type === 'null' || object.type.endsWith('?'))) this.fail(node, `Cannot access '${name}' on nullable ${object.type}; check a local value against null first`);
     if (object.kind === 'value' && (object.type === 'String' || object.type.endsWith('[]')) && name === 'length') return value('int');
     if (object.kind === 'enum') {
       if (!object.enum.values.has(name)) this.fail(node, `Unknown enum value '${name}'`);
@@ -70,12 +77,12 @@ class Checker {
     return { kind: 'method', cls, method };
   }
   name(name, scope, node) {
-    if (name === 'this') {
-      if (!scope.instance) this.fail(node, 'this is unavailable in a static method');
+    if (name === 'me') {
+      if (!scope.instance) this.fail(node, 'me is unavailable in a static method');
       return value(scope.owner.name);
     }
     const local = scope.find(name);
-    if (local) return local;
+    if (local) return { ...local, type: scope.facts.get(local) ?? local.type, declaredType: local.type, binding: local };
     if (scope.instance && scope.owner.fields.has(name)) return this.field(scope.owner, scope.owner.fields.get(name), scope, node);
     if (scope.owner.enums.has(name)) return { kind: 'enum', cls: scope.owner, enum: scope.owner.enums.get(name) };
     if (scope.owner.lifecycle) {
@@ -89,8 +96,8 @@ class Checker {
   }
   target(node, scope) {
     const target = this.expression(node, scope);
-    if (!target.writable) this.fail(node, 'Cannot assign to a loop counter, lifecycle field, or non-writable expression');
-    return target;
+    if (!target.writable) this.fail(node, 'Cannot assign to a loop counter, lifecycle field, belongsTo reference, or non-writable expression');
+    return { ...target, readType: target.type, type: target.declaredType ?? target.type };
   }
   arguments(method, cls, args, scope, node) {
     if (args.length !== method.params.length) this.fail(node, `${method.name} expects ${method.params.length} arguments, got ${args.length}`);
@@ -99,6 +106,7 @@ class Checker {
   binary(op, left, right, node) {
     const a = this.requireValue(left, node), b = this.requireValue(right, node);
     if (op === '==' || op === '!=') {
+      if (a === 'null' || b === 'null') return value('boolean');
       if (!this.assignable(a, b) && !this.assignable(b, a)) this.fail(node, `Cannot compare ${a} with ${b}`);
       return value('boolean');
     }
@@ -117,6 +125,7 @@ class Checker {
       case 'member': return this.member(this.expression(node.object, scope), node.name, scope, node);
       case 'index': {
         const object = this.requireValue(this.expression(node.object, scope), node.object);
+        if (object.endsWith('?') || object === 'null') this.fail(node, 'Cannot index a nullable value; check a local value against null first');
         this.expect('int', this.expression(node.index, scope), node.index);
         if (object === 'String') return value('String');
         if (object.endsWith('[]')) return value(object.slice(0, -2));
@@ -129,20 +138,35 @@ class Checker {
         if (!numeric(this.requireValue(operand, node))) this.fail(node, `Operator '${node.op}' requires a number`);
         return value(operand.type);
       }
-      case 'binary': return this.binary(node.op, this.expression(node.left, scope), this.expression(node.right, scope), node);
+      case 'binary': {
+        const left = this.expression(node.left, scope);
+        if (node.op === '&&' || node.op === '||') {
+          const rightScope = new Scope(scope);
+          this.refine(node.left, node.op === '&&', rightScope);
+          const right = this.expression(node.right, rightScope);
+          scope.facts = this.commonFacts([scope, rightScope]);
+          return this.binary(node.op, left, right, node);
+        }
+        return this.binary(node.op, left, this.expression(node.right, scope), node);
+      }
       case 'assign': {
         const target = this.target(node.left, scope), right = this.expression(node.right, scope);
-        this.expect(target.type, node.op === '=' ? right : this.binary(node.op[0], target, right, node), node);
+        this.expect(target.type, node.op === '=' ? right : this.binary(node.op[0], value(target.readType), right, node), node);
+        if (target.binding) {
+          scope.facts.delete(target.binding);
+          if (target.type.endsWith('?') && right.kind === 'value' && right.type !== 'null' && !right.type.endsWith('?')) scope.facts.set(target.binding, target.type.slice(0, -1));
+        }
         return value(target.type);
       }
       case 'update': {
         const target = this.target(node.value, scope);
-        if (!numeric(target.type)) this.fail(node, 'Increment/decrement requires a number');
-        return value(target.type);
+        if (!numeric(target.readType)) this.fail(node, 'Increment/decrement requires a number');
+        return value(target.readType);
       }
       case 'new': {
         const cls = this.classes.get(node.name);
         if (!cls) this.fail(node, `Unknown class '${node.name}'`);
+        if (cls.kind === 'interface') this.fail(node, `Cannot construct interface '${node.name}'`);
         const constructor = cls.methods.get(cls.name);
         if (constructor) { this.access(constructor, cls, scope, node); this.arguments(constructor, cls, node.args, scope, node); }
         else if (node.args.length) this.fail(node, `${cls.name} has no constructor accepting arguments`);
@@ -158,6 +182,37 @@ class Checker {
       default: this.fail(node, `Unknown expression '${node.kind}'`);
     }
   }
+  commonFacts(scopes) {
+    if (!scopes.length) return new Map();
+    return new Map([...scopes[0].facts].filter(([key, type]) => scopes.every(scope => scope.facts.get(key) === type)));
+  }
+  assignedNames(node, names = new Set()) {
+    if (!node || typeof node !== 'object') return names;
+    const target = node.kind === 'assign' ? node.left : node.kind === 'update' ? node.value : null;
+    if (target?.kind === 'name') names.add(target.name);
+    for (const [key, child] of Object.entries(node)) if (key !== 'token') {
+      if (Array.isArray(child)) child.forEach(item => this.assignedNames(item, names));
+      else if (child && typeof child === 'object') this.assignedNames(child, names);
+    }
+    return names;
+  }
+  refine(condition, truth, scope, assigned = this.assignedNames(condition)) {
+    if (condition.kind === 'unary' && condition.op === '!') return this.refine(condition.value, !truth, scope, assigned);
+    if (condition.kind !== 'binary') return;
+    if ((condition.op === '&&' && truth) || (condition.op === '||' && !truth)) {
+      this.refine(condition.left, truth, scope, assigned); this.refine(condition.right, truth, scope, assigned); return;
+    }
+    if (!['==', '!='].includes(condition.op) || truth !== (condition.op === '!=')) return;
+    const name = condition.left.kind === 'name' && condition.right.kind === 'literal' && condition.right.value === null ? condition.left.name :
+      condition.right.kind === 'name' && condition.left.kind === 'literal' && condition.left.value === null ? condition.right.name : null;
+    const binding = name && scope.find(name);
+    if (binding?.type.endsWith('?') && !assigned.has(name)) scope.facts.set(binding, binding.type.slice(0, -1));
+  }
+  killLoopFacts(node, scope) {
+    for (const name of this.assignedNames(node)) {
+      const binding = scope.find(name); if (binding) scope.facts.delete(binding);
+    }
+  }
   // Completion sets track all paths; unreachable statements are still type checked.
   statement(node, scope, returnType) {
     switch (node.kind) {
@@ -168,15 +223,19 @@ class Checker {
           const next = this.statement(child, local, returnType);
           if (paths.delete('normal')) paths = new Set([...paths, ...next]);
         }
+        scope.facts = local.facts;
         return paths;
       }
       case 'declare': {
         const type = this.type(node.type, scope.owner, node);
-        if (node.value) this.expect(type, this.expression(node.value, scope), node.value);
-        this.declare(scope, node.name, type, node); break;
+        const initial = node.value ? this.expression(node.value, scope) : null;
+        if (initial) this.expect(type, initial, node.value);
+        const binding = this.declare(scope, node.name, type, node);
+        if (type.endsWith('?') && initial && initial.type !== 'null' && !initial.type.endsWith('?')) scope.facts.set(binding, type.slice(0, -1));
+        break;
       }
       case 'expression': this.expression(node.expression, scope); break;
-      case 'require': this.expect('boolean', this.expression(node.condition, scope), node.condition); break;
+      case 'require': this.expect('boolean', this.expression(node.condition, scope), node.condition); this.refine(node.condition, true, scope); break;
       case 'return': {
         if (returnType === 'void') { if (node.value) this.fail(node, 'A void method cannot return a value'); }
         else if (!node.value) this.fail(node, `Expected return value of type ${returnType}`);
@@ -186,21 +245,28 @@ class Checker {
       case 'break': case 'continue': return new Set([node.kind]);
       case 'if': {
         this.expect('boolean', this.expression(node.condition, scope), node.condition);
-        const yes = this.statement(node.yes, scope, returnType);
-        const no = node.no ? this.statement(node.no, scope, returnType) : new Set(['normal']);
-        if (node.condition.kind === 'literal') return node.condition.value ? yes : no;
+        const yesScope = new Scope(scope), noScope = new Scope(scope);
+        this.refine(node.condition, true, yesScope); this.refine(node.condition, false, noScope);
+        const yes = this.statement(node.yes, yesScope, returnType);
+        const no = node.no ? this.statement(node.no, noScope, returnType) : new Set(['normal']);
+        if (node.condition.kind === 'literal') { scope.facts = node.condition.value ? yesScope.facts : noScope.facts; return node.condition.value ? yes : no; }
+        scope.facts = this.commonFacts([...(yes.has('normal') ? [yesScope] : []), ...(no.has('normal') ? [noScope] : [])]);
         return new Set([...yes, ...no]);
       }
       case 'for': {
         this.expect('int', this.expression(node.start, scope), node.start);
         this.expect('int', this.expression(node.end, scope), node.end);
+        this.killLoopFacts(node.body, scope);
         const local = new Scope(scope); this.declare(local, node.name, 'int', node, true);
         const paths = this.statement(node.body, local, returnType);
         return new Set(['normal', ...(paths.has('return') ? ['return'] : [])]);
       }
       case 'while': {
+        this.killLoopFacts(node, scope);
         this.expect('boolean', this.expression(node.condition, scope), node.condition);
-        const paths = this.statement(node.body, scope, returnType);
+        const local = new Scope(scope); this.refine(node.condition, true, local);
+        const paths = this.statement(node.body, local, returnType);
+        this.killLoopFacts(node.body, scope);
         const result = new Set(paths.has('return') ? ['return'] : []);
         if (!(node.condition.kind === 'literal' && node.condition.value === true) || paths.has('break')) result.add('normal');
         return result;
@@ -211,6 +277,7 @@ class Checker {
   }
   program() {
     for (const cls of this.classes.values()) {
+      if (cls.kind === 'interface') continue;
       const fields = new Scope(null, cls, true);
       for (const field of cls.fields.values()) {
         if (field.init) this.expect(this.type(field.type, cls, field), this.expression(field.init, fields), field.init);

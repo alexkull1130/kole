@@ -16,7 +16,7 @@ export class Runtime {
     this.classes = new Map(); this.print = print; this.steps = 0; this.maxSteps = maxSteps; this.depth = 0;
     for (const declaration of program.classes) {
       if (this.classes.has(declaration.name) || ['int', 'double', 'boolean', 'String', 'void', 'print'].includes(declaration.name)) this.fail(declaration, `Duplicate or reserved class '${declaration.name}'`);
-      this.classes.set(declaration.name, { kind: 'class', name: declaration.name, fields: new Map(), methods: new Map(), enums: new Map(), declaration, lifecycle: null });
+      this.classes.set(declaration.name, { kind: declaration.isInterface ? 'interface' : 'class', name: declaration.name, fields: new Map(), methods: new Map(), enums: new Map(), declaration, lifecycle: null, interfaces: new Set(declaration.interfaces ?? []) });
     }
     for (const cls of this.classes.values()) {
       const names = new Set();
@@ -32,6 +32,7 @@ export class Runtime {
             cls.lifecycle = m;
           }
         } else if (m.kind === 'enum') {
+          if (this.classes.has(m.name) || ['int', 'double', 'boolean', 'String', 'void'].includes(m.name)) this.fail(m, `Enum name '${m.name}' conflicts with a type name`);
           if (new Set(m.values).size !== m.values.length) this.fail(m, 'Duplicate enum state');
           const values = new Map(m.values.map(name => [name, { kind: 'enumValue', owner: cls.name, type: m.name, name }]));
           cls.enums.set(m.name, { kind: 'enum', owner: cls.name, name: m.name, values, declaration: m });
@@ -58,15 +59,44 @@ export class Runtime {
         for (const p of method.params) this.validateType(p.type, cls, p);
       }
     }
+    for (const cls of this.classes.values()) {
+      if (cls.interfaces.size !== (cls.declaration.interfaces ?? []).length) this.fail(cls.declaration, 'Duplicate implemented interface');
+      for (const name of cls.interfaces) {
+        const contract = this.classes.get(name);
+        if (!contract || contract.kind !== 'interface') this.fail(cls.declaration, `'${name}' is not an interface`);
+        for (const requirement of contract.methods.values()) {
+          const method = cls.methods.get(requirement.name);
+          if (!method) this.fail(cls.declaration, `${cls.name} must implement ${name}.${requirement.name}`);
+          if (method.isStatic || method.access !== 'public' || method.constructor || method.from || method.type !== requirement.type || method.params.length !== requirement.params.length || method.params.some((p, i) => p.type !== requirement.params[i].type || cls.enums.has(p.type))) {
+            this.fail(method, `Signature of '${method.name}' must match interface ${name} exactly, without lifecycle restrictions`);
+          }
+        }
+      }
+    }
+    for (const cls of this.classes.values()) for (const field of cls.fields.values()) {
+      if (!field.relationship) continue;
+      const related = this.classes.get(field.type.replace(/\?$/, ''));
+      if (!related || related.kind !== 'class') this.fail(field, 'Relationships require a concrete class type, optionally nullable');
+      if (field.relationship === 'belongsTo') {
+        if (!field.type.endsWith('?') || field.init) this.fail(field, 'belongsTo must be nullable with no initializer; kole maintains the back-reference');
+        if (![...related.fields.values()].some(candidate => candidate.relationship === 'owns' && candidate.type.replace(/\?$/, '') === cls.name)) this.fail(field, 'belongsTo needs a matching owns field in the owner class');
+      } else {
+        const inverses = [...related.fields.values()].filter(candidate => candidate.relationship === 'belongsTo' && candidate.type.replace(/\?$/, '') === cls.name);
+        if (inverses.length > 1) this.fail(field, 'Ambiguous belongsTo relationship: only one back-reference per owner type is supported');
+        field.inverse = inverses[0]?.name ?? null;
+      }
+    }
   }
   fail(node, message) { throw new KoleError(message, node?.token ?? node); }
   tick(node) { if (++this.steps > this.maxSteps) this.fail(node, 'Execution step limit exceeded'); }
   validateType(type, owner, node) {
+    if (type.endsWith('?')) return this.validateType(type.slice(0, -1), owner, node);
     if (type.endsWith('[]')) return this.validateType(type.slice(0, -2), owner, node);
     if (!['int', 'double', 'boolean', 'String'].includes(type) && !this.classes.has(type) && !owner?.enums.has(type)) this.fail(node, `Unknown type '${type}'`);
   }
   checkType(type, value, owner, node) {
     this.validateType(type, owner, node);
+    if (type.endsWith('?')) return value === null ? null : this.checkType(type.slice(0, -1), value, owner, node);
     let valid;
     if (type.endsWith('[]')) {
       valid = Array.isArray(value);
@@ -74,9 +104,9 @@ export class Runtime {
     } else if (type === 'int') valid = Number.isSafeInteger(value) && value >= -2147483648 && value <= 2147483647;
     else if (type === 'double') valid = typeof value === 'number' && Number.isFinite(value);
     else if (type === 'boolean') valid = typeof value === 'boolean';
-    else if (type === 'String') valid = typeof value === 'string' || value === null;
+    else if (type === 'String') valid = typeof value === 'string';
     else if (owner?.enums.has(type)) valid = value?.kind === 'enumValue' && value.owner === owner.name && value.type === type;
-    else valid = value === null || (value?.kind === 'instance' && value.cls.name === type);
+    else valid = value?.kind === 'instance' && (value.cls.name === type || value.cls.interfaces.has(type));
     if (!valid) this.fail(node, `Expected ${type}, received ${this.format(value)}`);
     return value;
   }
@@ -132,7 +162,7 @@ export class Runtime {
     return { kind: 'method', cls, method, self: method.isStatic ? null : object };
   }
   resolve(name, scope, node) {
-    if (name === 'this') { if (!scope.self) this.fail(node, 'this is unavailable in a static method'); return scope.self; }
+    if (name === 'me') { if (!scope.self) this.fail(node, 'me is unavailable in a static method'); return scope.self; }
     const binding = scope.find(name);
     if (binding) return this.read(binding, node);
     if (scope.self && scope.owner.fields.has(name)) return this.member(scope.self, name, scope, node);
@@ -154,8 +184,34 @@ export class Runtime {
       if (!binding && scope.self) binding = this.field(scope.self, node.name, scope, node);
     } else if (node.kind === 'member') binding = this.field(this.eval(node.object, scope), node.name, scope, node);
     if (!binding) this.fail(node, 'Unknown assignment target');
-    if (binding.readonly) this.fail(node, 'Cannot assign to a loop counter or lifecycle field directly');
+    if (binding.readonly) this.fail(node, 'Cannot assign to a loop counter, lifecycle field, or belongsTo reference directly');
     return binding;
+  }
+  detach(binding) {
+    const previous = binding.value;
+    if (previous?.kind !== 'instance' || previous.ownerSlot !== binding) return;
+    previous.ownerSlot = null;
+    if (binding.definition.inverse) previous.fields.get(binding.definition.inverse).value = null;
+  }
+  write(binding, value, node) {
+    this.checkType(binding.type, value, binding.owner, node);
+    if (binding.definition?.relationship === 'owns') {
+      if (value !== null) {
+        if (value.ownerSlot && value.ownerSlot !== binding) this.fail(node, 'Object already has an owner; detach it before assigning a new owner');
+        for (let ancestor = binding.object; ancestor; ancestor = ancestor.ownerSlot?.object) {
+          if (ancestor === value) this.fail(node, 'Ownership cycles are forbidden');
+        }
+        if (value.constructing) this.fail(node, 'Cannot take ownership of an object before its constructor finishes');
+      }
+      // Validate completely before changing either side of the relationship.
+      this.detach(binding);
+      binding.value = value;
+      if (value !== null) {
+        value.ownerSlot = binding;
+        if (binding.definition.inverse) value.fields.get(binding.definition.inverse).value = binding.object;
+      }
+    } else binding.value = value;
+    return value;
   }
   binary(op, a, b, node) {
     if (op === '==') return a === b;
@@ -199,7 +255,7 @@ export class Runtime {
         const previous = node.op === '=' ? undefined : this.read(binding, node);
         const right = this.eval(node.right, scope);
         const value = node.op === '=' ? right : this.binary(node.op[0], previous, right, node);
-        binding.value = this.checkType(binding.type, value, binding.owner, node); return value;
+        return this.write(binding, value, node);
       }
       case 'update': {
         const binding = this.reference(node.value, scope), previous = this.read(binding, node);
@@ -256,18 +312,23 @@ export class Runtime {
   create(name, args, caller, node) {
     const cls = this.classes.get(name);
     if (!cls) this.fail(node, `Unknown class '${name}'`);
+    if (cls.kind === 'interface') this.fail(node, `Cannot construct interface '${name}'`);
     if (++this.depth > 256) { this.depth--; this.fail(node, 'Call depth limit exceeded during object construction'); }
+    const object = { kind: 'instance', cls, fields: new Map(), transitioning: false, ownerSlot: null, constructing: true };
     try {
-    const object = { kind: 'instance', cls, fields: new Map(), transitioning: false };
     const scope = new Scope(null, cls, object);
-    for (const field of cls.fields.values()) object.fields.set(field.name, { type: field.type, value: UNSET, owner: cls, readonly: field.lifecycle });
+    for (const field of cls.fields.values()) object.fields.set(field.name, { type: field.type, value: field.relationship === 'belongsTo' ? null : UNSET, owner: cls, readonly: field.lifecycle || field.relationship === 'belongsTo', definition: field, object });
     for (const field of cls.fields.values()) {
-      if (field.init) object.fields.get(field.name).value = this.checkType(field.type, this.eval(field.init, scope), cls, field);
+      if (field.init) this.write(object.fields.get(field.name), this.eval(field.init, scope), field);
     }
     const constructor = cls.methods.get(name);
     if (constructor) { this.access(constructor, cls, caller, node); this.invoke({ cls, self: object, method: constructor }, args, node); }
     else if (args.length) this.fail(node, `${name} has no constructor accepting arguments`);
+    object.constructing = false;
     return object;
+    } catch (error) {
+      for (const binding of object.fields.values()) if (binding.definition.relationship === 'owns') this.detach(binding);
+      throw error;
     } finally { this.depth--; }
   }
   invoke({ cls, self, method }, args, node) {

@@ -1,6 +1,6 @@
 class Customer {
     public name: String;
-    public Customer(name: String) { this.name = name; }
+    public Customer(name: String) { me.name = name; }
 }
 
 public class Order {
@@ -10,7 +10,7 @@ public class Order {
     private customer: Customer;
     private itemCount: int = 0;
 
-    public Order(customer: Customer) { this.customer = customer; }
+    public Order(customer: Customer) { me.customer = customer; }
     public addItem() -> void requires DRAFT { itemCount += 1; }
     public place() -> void transitions DRAFT -> PLACED {
         require itemCount > 0;
