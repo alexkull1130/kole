@@ -147,7 +147,8 @@ class Analysis {
   check() {
     this.constructing = true;
     let initialized = new Set([...this.cls.fields.values()].filter(f => f.relationship === 'belongsTo'));
-    for (const field of this.cls.fields.values()) {
+    for (const field of this.cls.fields.values()) if (field.owner !== this.cls) initialized.add(field);
+    for (const field of this.cls.ownFields.values()) {
       if (field.init) { initialized = this.expression(field.init, new Scope(), initialized); initialized.add(field); }
     }
     const constructor = this.cls.methods.get(this.cls.name);
@@ -155,13 +156,18 @@ class Analysis {
     if (constructor) {
       const scope = new Scope(); const state = new Set(initialized);
       for (const param of constructor.params) { scope.locals.set(param.name, param); state.add(param); }
-      exits = this.statement(constructor.body, scope, state);
+      const first = constructor.body.statements[0];
+      if (first?.kind === 'superCall') {
+        let before = new Set(constructor.params);
+        for (const arg of first.args) before = this.expression(arg, scope, before);
+      }
+      exits = this.statement({ ...constructor.body, statements: constructor.body.statements.slice(first?.kind === 'superCall' ? 1 : 0) }, scope, state);
     }
     for (const [kind, state] of exits) if (kind === 'normal' || kind === 'return') {
       for (const field of this.cls.fields.values()) if (!state.has(field)) this.fail(constructor ?? field, `Field '${field.name}' must be initialized on every constructor path`);
     }
     this.constructing = false;
-    for (const method of this.cls.methods.values()) {
+    for (const method of this.cls.ownMethods.values()) {
       if (method.constructor || !method.body) continue;
       this.instance = !method.isStatic;
       const scope = new Scope(), state = new Set(this.cls.fields.values());

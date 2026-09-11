@@ -1,3 +1,4 @@
+import { linkInheritance, isSubtype } from './inheritance.mjs';
 import { builtinSignature, callBuiltin } from './builtins.mjs';
 import { KoleError } from './lexer.mjs';
 import { parse } from './parser.mjs';
@@ -40,17 +41,22 @@ export class Runtime {
           cls.enums.set(m.name, { kind: 'enum', owner: cls.name, name: m.name, values, declaration: m });
         } else cls.methods.set(m.name, m);
       }
+      for (const method of cls.methods.values()) {
+        const parameters = new Set();
+        for (const p of method.params) {
+          if (parameters.has(p.name)) this.fail(p, `Duplicate parameter '${p.name}'`);
+          parameters.add(p.name);
+        }
+      }
+    }
+    linkInheritance(this);
+    for (const cls of this.classes.values()) {
       if (cls.lifecycle && !cls.enums.has(cls.lifecycle.type)) this.fail(cls.lifecycle, 'Lifecycle type must be an enum declared in this class');
       for (const method of cls.methods.values()) {
         if (method.from) {
           if (!cls.lifecycle) this.fail(method, 'Lifecycle method requires a state field');
           const values = cls.enums.get(cls.lifecycle.type).values;
           if (!values.has(method.from) || (method.to && !values.has(method.to))) this.fail(method, 'Unknown lifecycle state');
-        }
-        const parameters = new Set();
-        for (const p of method.params) {
-          if (parameters.has(p.name)) this.fail(p, `Duplicate parameter '${p.name}'`);
-          parameters.add(p.name);
         }
       }
     }
@@ -62,12 +68,13 @@ export class Runtime {
       }
     }
     for (const cls of this.classes.values()) {
-      if (cls.interfaces.size !== (cls.declaration.interfaces ?? []).length) this.fail(cls.declaration, 'Duplicate implemented interface');
+      if (new Set(cls.declaration.interfaces ?? []).size !== (cls.declaration.interfaces ?? []).length) this.fail(cls.declaration, 'Duplicate implemented interface');
       for (const name of cls.interfaces) {
         const contract = this.classes.get(name);
         if (!contract || contract.kind !== 'interface') this.fail(cls.declaration, `'${name}' is not an interface`);
         for (const requirement of contract.methods.values()) {
           const method = cls.methods.get(requirement.name);
+          if (!method && cls.isAbstract) continue;
           if (!method) this.fail(cls.declaration, `${cls.name} must implement ${name}.${requirement.name}`);
           if (method.isStatic || method.access !== 'public' || method.constructor || method.from || method.type !== requirement.type || method.params.length !== requirement.params.length || method.params.some((p, i) => p.type !== requirement.params[i].type || cls.enums.has(p.type))) {
             this.fail(method, `Signature of '${method.name}' must match interface ${name} exactly, without lifecycle restrictions`);
@@ -75,7 +82,7 @@ export class Runtime {
         }
       }
     }
-    for (const cls of this.classes.values()) for (const field of cls.fields.values()) {
+    for (const cls of this.classes.values()) for (const field of cls.ownFields.values()) {
       if (!field.relationship) continue;
       const related = this.classes.get(field.type.replace(/\?$/, ''));
       if (!related || related.kind !== 'class') this.fail(field, 'Relationships require a concrete class type, optionally nullable');
@@ -103,7 +110,7 @@ export class Runtime {
     if (type.endsWith('?')) return this.typeKey(type.slice(0, -1), owner) + '?';
     if (type.endsWith('[]')) return this.typeKey(type.slice(0, -2), owner) + '[]';
     if (type.startsWith('List<') && type.endsWith('>')) return `List<${this.typeKey(type.slice(5, -1), owner)}>`;
-    return owner?.enums.has(type) ? `${owner.name}.${type}` : type;
+    return owner?.enums.has(type) ? `${owner.enums.get(type).owner}.${type}` : type;
   }
   checkType(type, value, owner, node) {
     this.validateType(type, owner, node);
@@ -119,7 +126,7 @@ export class Runtime {
     else if (type === 'string') valid = typeof value === 'string';
     else if (type === 'char') valid = value?.kind === 'char';
     else if (owner?.enums.has(type) || type.includes('.')) valid = value?.kind === 'enumValue' && `${value.owner}.${value.type}` === this.typeKey(type, owner);
-    else valid = value?.kind === 'instance' && (value.cls.name === type || value.cls.interfaces.has(type));
+    else valid = value?.kind === 'instance' && isSubtype(value.cls, type);
     if (!valid) this.fail(node, `Expected ${type}, received ${this.format(value)}`);
     return value;
   }
@@ -203,6 +210,7 @@ export class Runtime {
     return binding.value;
   }
   access(member, cls, scope, node) {
+    cls = member.owner ?? cls;
     if (member.access === 'private' && scope.owner !== cls) this.fail(node, `'${member.name}' is private to ${cls.name}`);
   }
   field(object, name, scope, node) {
@@ -223,7 +231,7 @@ export class Runtime {
       if (!object.values.has(name)) this.fail(node, `Unknown enum value '${name}'`);
       return object.values.get(name);
     }
-    const cls = object?.kind === 'class' ? object : object?.kind === 'instance' ? object.cls : null;
+    const cls = object?.kind === 'class' ? object : ['instance', 'super'].includes(object?.kind) ? object.cls : null;
     if (!cls) this.fail(node, `Cannot access '${name}' on ${this.format(object)}`);
     if (object.kind === 'instance' && cls.fields.has(name)) return this.read(this.field(object, name, scope, node), node);
     if (cls.enums.has(name)) {
@@ -233,9 +241,10 @@ export class Runtime {
     if (!method || method.constructor) this.fail(node, `Unknown member '${name}' on ${cls.name}`);
     this.access(method, cls, scope, node);
     if (!method.isStatic && object.kind === 'class') this.fail(node, `Method '${name}' needs an instance`);
-    return { kind: 'method', cls, method, self: method.isStatic ? null : object };
+    return { kind: 'method', cls: method.owner ?? cls, method, self: method.isStatic ? null : object.kind === 'super' ? object.self : object };
   }
   resolve(name, scope, node) {
+    if (name === 'super') { if (!scope.self || !scope.owner.parent) this.fail(node, 'super requires a subclass instance'); return { kind: 'super', cls: scope.owner.parent, self: scope.self }; }
     if (name === 'me') { if (!scope.self) this.fail(node, 'me is unavailable in a static method'); return scope.self; }
     const binding = scope.find(name);
     if (binding) return this.read(binding, node);
@@ -378,6 +387,7 @@ export class Runtime {
         for (const statement of node.statements) this.statement(statement, local);
         break;
       }
+      case 'superCall': this.fail(node, 'super(...) must be the first constructor statement'); break;
       case 'declare': this.declare(scope, node.name, node.type, node.value ? this.eval(node.value, scope) : UNSET, node); break;
       case 'expression': this.eval(node.expression, scope); break;
       case 'return': throw new Flow('return', node.value ? this.eval(node.value, scope) : undefined);
@@ -412,17 +422,14 @@ export class Runtime {
     const cls = this.classes.get(name);
     if (!cls) this.fail(node, `Unknown class '${name}'`);
     if (cls.kind === 'interface') this.fail(node, `Cannot construct interface '${name}'`);
+    if (cls.isAbstract) this.fail(node, `Cannot construct abstract class '${name}'`);
     if (++this.depth > 256) { this.depth--; this.fail(node, 'Call depth limit exceeded during object construction'); }
     const object = { kind: 'instance', cls, fields: new Map(), transitioning: false, ownerSlot: null, constructing: true };
     try {
-    const scope = new Scope(null, cls, object);
-    for (const field of cls.fields.values()) object.fields.set(field.name, { type: field.type, value: field.relationship === 'belongsTo' ? null : UNSET, owner: cls, readonly: field.lifecycle || field.relationship === 'belongsTo', definition: field, object });
-    for (const field of cls.fields.values()) {
-      if (field.init) this.write(object.fields.get(field.name), this.eval(field.init, scope), field);
-    }
-    const constructor = cls.methods.get(name);
-    if (constructor) { this.access(constructor, cls, caller, node); this.invoke({ cls, self: object, method: constructor }, args, node); }
-    else if (args.length) this.fail(node, `${name} has no constructor accepting arguments`);
+    for (const field of cls.fields.values()) object.fields.set(field.name, { type: field.type, value: field.relationship === 'belongsTo' ? null : UNSET, owner: field.owner, readonly: field.lifecycle || field.relationship === 'belongsTo', definition: field, object });
+    const constructor = cls.ownMethods.get(cls.name);
+    if (constructor) this.access(constructor, cls, caller, node);
+    this.initialize(cls, object, args, node);
     object.constructing = false;
     return object;
     } catch (error) {
@@ -430,7 +437,26 @@ export class Runtime {
       throw error;
     } finally { this.depth--; }
   }
+  initialize(cls, object, args, node) {
+    const constructor = cls.ownMethods.get(cls.name);
+    const scope = new Scope(null, cls, object);
+    if (args.length !== (constructor?.params.length ?? 0)) this.fail(node, `${cls.name} expects ${constructor?.params.length ?? 0} arguments`);
+    constructor?.params.forEach((p,i)=>this.declare(scope,p.name,p.type,args[i],p));
+    const first = constructor?.body.statements[0];
+    if (cls.parent) {
+      const parentConstructor = cls.parent.ownMethods.get(cls.parent.name);
+      if (parentConstructor) this.access(parentConstructor, cls.parent, scope, node);
+      this.initialize(cls.parent, object, first?.kind === 'superCall' ? first.args.map(arg=>this.eval(arg,scope)) : [], node);
+    }
+    for (const field of cls.ownFields.values()) if (field.init) this.write(object.fields.get(field.name), this.eval(field.init, scope), field);
+    if (constructor) {
+      try { this.statement({ ...constructor.body, statements: constructor.body.statements.slice(first?.kind === 'superCall' ? 1 : 0) }, scope); }
+      catch (flow) { if (!(flow instanceof Flow) || flow.kind !== 'return') throw flow; if (flow.value !== undefined) this.fail(node,'A constructor cannot return a value'); }
+    }
+  }
   invoke({ cls, self, method }, args, node) {
+    if (method.isAbstract || !method.body) this.fail(node, 'Cannot invoke an abstract method');
+    if (self?.constructing && [...self.fields.values()].some(binding => binding.value === UNSET)) this.fail(node, 'Cannot call an instance method before all fields are initialized');
     if (args.length !== method.params.length) this.fail(node, `${method.name} expects ${method.params.length} arguments, got ${args.length}`);
     if (++this.depth > 256) { this.depth--; this.fail(node, 'Call depth limit exceeded'); }
     let transitionStarted = false;

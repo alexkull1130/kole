@@ -1,7 +1,7 @@
 import { KoleError, tokenize } from './lexer.mjs';
 import { literalNumber, makeChar } from './numbers.mjs';
 
-const reserved = new Set(['class', 'interface', 'implements', 'public', 'private', 'static', 'enum', 'state', 'requires', 'transitions', 'require', 'if', 'else', 'while', 'for', 'return', 'break', 'continue', 'new', 'me', 'this', 'true', 'false', 'null', 'owns', 'belongsTo', 'atomic']);
+const reserved = new Set(['extends', 'override', 'abstract', 'super', 'class', 'interface', 'implements', 'public', 'private', 'static', 'enum', 'state', 'requires', 'transitions', 'require', 'if', 'else', 'while', 'for', 'return', 'break', 'continue', 'new', 'me', 'this', 'true', 'false', 'null', 'owns', 'belongsTo', 'atomic']);
 const precedence = { '=': 1, '+=': 1, '-=': 1, '||': 2, '&&': 3, '==': 4, '!=': 4, '<': 5, '>': 5, '<=': 5, '>=': 5, '+': 6, '-': 6, '*': 7, '/': 7, '%': 7 };
 
 export function parse(source) { return new Parser(tokenize(source)).program(); }
@@ -42,15 +42,15 @@ class Parser {
     return type;
   }
   modifiers() {
-    let access = 'public', isStatic = false;
+    let access = 'public', isStatic = false, isAbstract = false, isOverride = false;
     const seen = new Set();
-    while (['public', 'private', 'static'].some(v => this.at(v))) {
+    while (['public', 'private', 'static', 'abstract', 'override'].some(v => this.at(v))) {
       const t = this.take();
-      if (seen.has(t.text) || (t.text !== 'static' && (seen.has('public') || seen.has('private')))) throw new KoleError('Duplicate or conflicting modifier', t);
+      if (seen.has(t.text) || (['public', 'private'].includes(t.text) && (seen.has('public') || seen.has('private')))) throw new KoleError('Duplicate or conflicting modifier', t);
       seen.add(t.text);
-      if (t.text === 'static') isStatic = true; else access = t.text;
+      if (t.text === 'static') isStatic = true; else if (t.text === 'abstract') isAbstract = true; else if (t.text === 'override') isOverride = true; else access = t.text;
     }
-    return { access, isStatic };
+    return { access, isStatic, isAbstract, isOverride };
   }
   program() {
     const classes = [];
@@ -60,9 +60,10 @@ class Parser {
   }
   classDecl() {
     const token = this.peek();
-    this.match('public'); const isInterface = !!this.match('interface');
+    this.match('public'); const isAbstract = !!this.match('abstract'); const isInterface = !!this.match('interface');
     if (!isInterface) this.expect('class');
     const name = this.name();
+    const parent = !isInterface && this.match('extends') ? this.type() : null;
     const interfaces = [];
     if (!isInterface && this.match('implements')) do { interfaces.push(this.name()); } while (this.match(','));
     this.expect('{');
@@ -70,6 +71,7 @@ class Parser {
     while (!this.at('}')) {
       const token = this.peek(), modifiers = this.modifiers();
       if (this.match('enum')) {
+        if (modifiers.isAbstract || modifiers.isOverride) throw new KoleError('abstract and override apply to methods only', token);
         if (isInterface) throw new KoleError('Interfaces contain method signatures only', token);
         const name = this.name(), values = [];
         this.expect('{');
@@ -115,10 +117,14 @@ class Parser {
         if (isInterface) {
           if (constructor || modifiers.isStatic || modifiers.access !== 'public' || from) throw new KoleError('Interface methods must be public instance signatures without lifecycle restrictions', token);
           this.expect(';'); body = null;
+        } else if (modifiers.isAbstract) {
+          if (!isAbstract || constructor || modifiers.isStatic || modifiers.access === 'private') throw new KoleError('Abstract methods require an abstract class and must be public instance methods', token);
+          this.expect(';'); body = null;
         } else body = this.block();
         members.push({ kind: 'method', name: memberName, type, params, body, from, to, constructor, token, ...modifiers });
       } else {
         if (isInterface) throw new KoleError('Interfaces contain method signatures only', token);
+        if (modifiers.isAbstract || modifiers.isOverride) throw new KoleError('abstract and override apply to methods only', token);
         if (modifiers.isStatic) throw new KoleError('Static fields are not implemented yet', token);
         const init = this.match('=') ? this.expression() : null;
         this.expect(';');
@@ -126,7 +132,7 @@ class Parser {
       }
     }
     this.expect('}');
-    return { name, members, token, isInterface, interfaces };
+    return { name, members, token, isInterface, interfaces, parent, isAbstract };
   }
   block() {
     const token = this.expect('{'), statements = [];
@@ -138,6 +144,10 @@ class Parser {
   }
   statement() {
     const token = this.peek();
+    if (this.at('super') && this.peek(1).text === '(') {
+      this.take(); this.expect('('); const args = this.arguments(); this.expect(';');
+      return { kind: 'superCall', args, token };
+    }
     if (this.at('{')) return this.block();
     if (this.match('for')) {
       this.expect('('); const name = this.name(); this.expect('=');
@@ -247,6 +257,7 @@ class Parser {
       this.expect(']'); return { kind: 'array', items, token };
     }
     if (this.match('(')) { const value = this.expression(); this.expect(')'); return value; }
+    if (this.match('super')) return { kind: 'name', name: 'super', token };
     if (this.match('me')) return { kind: 'name', name: 'me', token };
     if (this.at('this')) throw new KoleError("Use 'me' for the current object in kole", token);
     if (token.kind === 'identifier') return { kind: 'name', name: this.name(), token };

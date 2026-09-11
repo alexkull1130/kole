@@ -1,3 +1,4 @@
+import { isSubtype } from './inheritance.mjs';
 import { builtinSignature } from './builtins.mjs';
 import { KoleError } from './lexer.mjs';
 import { checkInitialization } from './initialization.mjs';
@@ -29,7 +30,7 @@ class Checker {
     if (name.endsWith('?')) return this.type(name.slice(0, -1), owner, node) + '?';
     if (name.endsWith('[]')) return this.type(name.slice(0, -2), owner, node) + '[]';
     if (name.startsWith('List<') && name.endsWith('>')) return `List<${this.type(name.slice(5, -1), owner, node)}>`;
-    if (owner.enums.has(name)) return `${owner.name}.${name}`;
+    if (owner.enums.has(name)) return `${owner.enums.get(name).owner}.${name}`;
     return name;
   }
   requireValue(info, node) {
@@ -40,7 +41,7 @@ class Checker {
     if (expected.endsWith('?')) return actual === 'null' || this.assignable(expected.slice(0, -1), actual.endsWith('?') ? actual.slice(0, -1) : actual);
     if (actual === 'null' || actual.endsWith('?')) return expected === actual;
     return expected === actual || widens(expected, actual) ||
-      (this.classes.get(actual)?.interfaces.has(expected) ?? false);
+      isSubtype(this.classes.get(actual), expected);
   }
   expect(expected, info, node) {
     const actual = this.requireValue(info, node);
@@ -56,7 +57,7 @@ class Checker {
   }
   field(cls, field, scope, node) {
     this.access(field, cls, scope, node);
-    return { ...value(this.type(field.type, cls, field)), writable: !field.lifecycle && field.relationship !== 'belongsTo' };
+    return { ...value(this.type(field.type, field.owner ?? cls, field)), writable: !field.lifecycle && field.relationship !== 'belongsTo' };
   }
   member(object, name, scope, node) {
     if (object.kind === 'value' && (object.type === 'null' || object.type.endsWith('?'))) this.fail(node, `Cannot access '${name}' on nullable ${object.type}; check a local value against null first`);
@@ -68,11 +69,11 @@ class Checker {
     }
     if (object.kind === 'enum') {
       if (!object.enum.values.has(name)) this.fail(node, `Unknown enum value '${name}'`);
-      return value(`${object.cls.name}.${object.enum.name}`);
+      return value(`${object.enum.owner}.${object.enum.name}`);
     }
-    const cls = object.kind === 'class' ? object.cls : object.kind === 'value' ? this.classes.get(object.type) : null;
+    const cls = ['class', 'super'].includes(object.kind) ? object.cls : object.kind === 'value' ? this.classes.get(object.type) : null;
     if (!cls) this.fail(node, `Cannot access '${name}' on ${object.type ?? object.kind}`);
-    if (cls.fields.has(name) && object.kind !== 'class') return this.field(cls, cls.fields.get(name), scope, node);
+    if (cls.fields.has(name) && object.kind === 'value') return this.field(cls, cls.fields.get(name), scope, node);
     if (cls.enums.has(name)) {
       const enumeration = cls.enums.get(name);
       this.access(enumeration.declaration, cls, scope, node);
@@ -82,9 +83,14 @@ class Checker {
     if (!method || method.constructor) this.fail(node, `Unknown member '${name}' on ${cls.name}`);
     this.access(method, cls, scope, node);
     if (!method.isStatic && object.kind === 'class') this.fail(node, `Method '${name}' needs an instance`);
-    return { kind: 'method', cls, method };
+    if (object.kind === 'super' && method.isAbstract) this.fail(node, 'Cannot invoke an abstract parent method');
+    return { kind: 'method', cls: method.owner ?? cls, method };
   }
   name(name, scope, node) {
+    if (name === 'super') {
+      if (!scope.instance || !scope.owner.parent) this.fail(node, 'super requires a subclass instance');
+      return { kind: 'super', cls: scope.owner.parent };
+    }
     if (name === 'me') {
       if (!scope.instance) this.fail(node, 'me is unavailable in a static method');
       return value(scope.owner.name);
@@ -95,7 +101,7 @@ class Checker {
     if (scope.owner.enums.has(name)) return { kind: 'enum', cls: scope.owner, enum: scope.owner.enums.get(name) };
     if (scope.owner.lifecycle) {
       const enumeration = scope.owner.enums.get(scope.owner.lifecycle.type);
-      if (enumeration.values.has(name)) return value(`${scope.owner.name}.${enumeration.name}`);
+      if (enumeration.values.has(name)) return value(`${enumeration.owner}.${enumeration.name}`);
     }
     if (scope.owner.methods.has(name)) return this.member(scope.instance ? value(scope.owner.name) : { kind: 'class', cls: scope.owner }, name, scope, node);
     if (this.classes.has(name)) return { kind: 'class', cls: this.classes.get(name) };
@@ -184,6 +190,7 @@ class Checker {
       case 'new': {
         const cls = this.classes.get(node.name);
         if (!cls) this.fail(node, `Unknown class '${node.name}'`);
+        if (cls.isAbstract) this.fail(node, `Cannot construct abstract class '${node.name}'`);
         if (cls.kind === 'interface') this.fail(node, `Cannot construct interface '${node.name}'`);
         const constructor = cls.methods.get(cls.name);
         if (constructor) { this.access(constructor, cls, scope, node); this.arguments(constructor, cls, node.args, scope, node); }
@@ -296,6 +303,7 @@ class Checker {
         if (type.endsWith('?') && initial && initial.type !== 'null' && !initial.type.endsWith('?')) scope.facts.set(binding, type.slice(0, -1));
         break;
       }
+      case 'superCall': this.fail(node, 'super(...) must be the first constructor statement of a subclass'); break;
       case 'expression': this.expression(node.expression, scope); break;
       case 'require': this.expect('bool', this.expression(node.condition, scope), node.condition); this.refine(node.condition, true, scope); break;
       case 'return': {
@@ -340,18 +348,36 @@ class Checker {
   program() {
     for (const cls of this.classes.values()) {
       if (cls.kind === 'interface') continue;
+      if (cls.parent && !cls.ownMethods.has(cls.name)) {
+        const parentConstructor = cls.parent.ownMethods.get(cls.parent.name);
+        if (parentConstructor) {
+          this.access(parentConstructor, cls.parent, { owner: cls }, cls.declaration);
+          if (parentConstructor.params.length) this.fail(cls.declaration, 'Subclass needs a constructor calling super with parent arguments');
+        }
+      }
       const fields = new Scope(null, cls, true);
-      for (const field of cls.fields.values()) {
+      for (const field of cls.ownFields.values()) {
         if (field.init) {
           const type = this.type(field.type, cls, field);
           this.expect(type, this.expression(field.init, fields, type), field.init);
         }
       }
-      for (const method of cls.methods.values()) {
+      for (const method of cls.ownMethods.values()) {
+        if (!method.body) continue;
         const scope = new Scope(null, cls, !method.isStatic);
         method.params.forEach(p => this.declare(scope, p.name, this.type(p.type, cls, p), p));
         const type = method.type === 'void' ? 'void' : this.type(method.type, cls, method);
-        const paths = this.statement(method.body, scope, type);
+        let body = method.body;
+        if (method.constructor && cls.parent) {
+          const first = body.statements[0];
+          const args = first?.kind === 'superCall' ? first.args : [];
+          const parentConstructor = cls.parent.ownMethods.get(cls.parent.name);
+          const beforeParent = new Scope(null, cls, false); beforeParent.locals = scope.locals;
+          if (parentConstructor) { this.access(parentConstructor, cls.parent, scope, method); this.arguments(parentConstructor, cls.parent, args, beforeParent, method); }
+          else if (args.length) this.fail(method, 'Parent has no constructor accepting arguments');
+          if (first?.kind === 'superCall') body = { ...body, statements: body.statements.slice(1) };
+        }
+        const paths = this.statement(body, scope, type);
         if (type !== 'void' && paths.has('normal')) this.fail(method, `Method '${method.name}' may finish without returning ${type}`);
       }
     }
