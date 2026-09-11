@@ -1,3 +1,4 @@
+import { builtinSignature, callBuiltin } from './builtins.mjs';
 import { KoleError } from './lexer.mjs';
 import { parse } from './parser.mjs';
 import { check } from './checker.mjs';
@@ -190,20 +191,6 @@ export class Runtime {
     if (type === 'bool') return this.bool(args[0], node);
     this.fail(node, `Unknown conversion ${type}`);
   }
-  callList({ object, name }, args, node) {
-    const arity = { add: 1, get: 1, set: 2, removeAt: 1, clear: 0, isEmpty: 0 }[name];
-    if (args.length !== arity) this.fail(node, `List.${name} expects ${arity} arguments`);
-    if (name === 'clear') { object.items.length = 0; return undefined; }
-    if (name === 'isEmpty') return object.items.length === 0;
-    if (name === 'add') {
-      const item = this.checkType(object.elementType, args[0], object.owner, node);
-      this.collectionSize(object.items.length + 1, node); object.items.push(item); return undefined;
-    }
-    const index = this.index(args[0], node); this.bounds(object.items, index, node);
-    if (name === 'get') return object.items[index];
-    if (name === 'removeAt') return object.items.splice(index, 1)[0];
-    object.items[index] = this.checkType(object.elementType, args[1], object.owner, node); return undefined;
-  }
   declare(scope, name, type, value, node, readonly = false) {
     if (scope.bindings.has(name)) this.fail(node, `Variable '${name}' is already declared in this scope`);
     this.validateType(type, scope.owner, node);
@@ -226,6 +213,7 @@ export class Runtime {
     return object.fields.get(name);
   }
   member(object, name, scope, node) {
+    if (builtinSignature(this.runtimeType(object), name)) return { kind: 'listMethod', object, name };
     if (typeof object === 'string' && name === 'length') return number('int', [...object].length, node);
     if (object?.kind === 'array' || object?.kind === 'list') {
       if (name === 'length') return number('int', object.items.length, node);
@@ -375,7 +363,7 @@ export class Runtime {
         const callee = this.eval(node.callee, scope), args = node.args.map(arg => this.eval(arg, scope));
         if (callee?.kind === 'print') { this.print(args.map(value => this.format(value)).join(' ')); return undefined; }
         if (callee?.kind === 'conversion') return this.convert(callee.type, args, node);
-        if (callee?.kind === 'listMethod') return this.callList(callee, args, node);
+        if (callee?.kind === 'listMethod') return callBuiltin(this, callee, args, node);
         if (callee?.kind !== 'method') this.fail(node, 'Value is not callable');
         return this.invoke(callee, args, node);
       }

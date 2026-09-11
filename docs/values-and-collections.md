@@ -95,3 +95,13 @@ Collections do not imply ownership of their elements. `owns`/`belongsTo` still a
 ```
 
 The interpreter still uses Node.js. Standalone native distribution remains separate work.
+
+## Expanded methods (0.5)
+
+Strings also provide `isEmpty()`, `contains(string)`, `startsWith(string)`, `endsWith(string)`, `indexOf(string)`, `lastIndexOf(string)`, `charAt(int)`, `substring(start: int, end: int)`, `trim()`, `toUpperCase()`, `toLowerCase()`, `replace(search: string, replacement: string)`, `split(separator: string)`, `repeat(count: int)`, and `toCharArray()`. Strings remain immutable. Search returns -1 when absent. Substring uses an exclusive end and checks bounds. Replace changes all literal occurrences and rejects an empty search. Split preserves empty pieces; an empty separator splits Unicode scalars. Case conversion is locale-independent. Repeat is capped at 100000 characters and repetitions.
+
+Arrays and Lists both provide `get(int)`, `set(int, A)`, `isEmpty()`, `contains(A)`, `indexOf(A)`, `lastIndexOf(A)`, `first()`, `last()`, `reverse()`, `copy()`, `slice(start: int, end: int)`, `join(separator: string)`, `toArray()`, and `toList()`. Search uses value equality for scalars and identity for objects; missing indices return -1. First/last on empty containers fail. Reverse changes the container in place and returns void. Copy, slice, and conversions create independent containers sharing their object elements. Slice checks an exclusive-end range.
+
+Lists additionally provide `addAll(values: A[])`, `insert(index: int, value: A)`, and `remove(value: A) -> bool` alongside their original methods. Remove deletes the first match. Insert permits index equal to length. Arrays remain fixed-length.
+
+Try `.\kole.cmd run examples\Methods.k`.

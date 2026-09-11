@@ -1,3 +1,4 @@
+import { builtinSignature } from './builtins.mjs';
 import { KoleError } from './lexer.mjs';
 import { checkInitialization } from './initialization.mjs';
 import { primitiveTypes, isNumeric, promoted, widens, fitsLiteral } from './numbers.mjs';
@@ -60,11 +61,10 @@ class Checker {
   member(object, name, scope, node) {
     if (object.kind === 'value' && (object.type === 'null' || object.type.endsWith('?'))) this.fail(node, `Cannot access '${name}' on nullable ${object.type}; check a local value against null first`);
     if (object.kind === 'value' && (object.type === 'string' || object.type.endsWith('[]') || object.type.startsWith('List<')) && name === 'length') return value('int');
-    if (object.kind === 'value' && object.type.startsWith('List<')) {
-      const A = object.type.slice(5, -1);
-      const signatures = { add: [[A], 'void'], get: [['int'], A], set: [['int', A], 'void'], removeAt: [['int'], A], clear: [[], 'void'], isEmpty: [[], 'bool'] };
-      if (signatures[name]) return { kind: 'listMethod', name, params: signatures[name][0], returns: signatures[name][1] };
-      this.fail(node, `Unknown member '${name}' on ${object.type}`);
+    if (object.kind === 'value') {
+      const signature = builtinSignature(object.type, name);
+      if (signature) return { kind: 'listMethod', name, params: signature[0], returns: signature[1] };
+      if (object.type.startsWith('List<')) this.fail(node, `Unknown member '${name}' on ${object.type}`);
     }
     if (object.kind === 'enum') {
       if (!object.enum.values.has(name)) this.fail(node, `Unknown enum value '${name}'`);
