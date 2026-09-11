@@ -6,7 +6,7 @@ export function linkInheritance(runtime) {
     visiting.add(cls);
     cls.ownFields = new Map(cls.fields); cls.ownMethods = new Map(cls.methods);
     cls.isAbstract = !!cls.declaration.isAbstract;
-    for (const member of [...cls.fields.values(), ...cls.methods.values()]) Object.defineProperty(member, 'owner', { value: cls, configurable: true });
+    for (const member of [...cls.fields.values(), ...cls.methods.values(), ...[...cls.enums.values()].map(e => e.declaration)]) Object.defineProperty(member, 'owner', { value: cls, configurable: true });
     if (cls.declaration.parent) {
       const parent = runtime.classes.get(cls.declaration.parent);
       if (!parent || parent.kind !== 'class') runtime.fail(cls.declaration, 'extends requires a class');

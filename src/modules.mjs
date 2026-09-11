@@ -1,3 +1,4 @@
+import { mapType } from './generics.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { parse } from './parser.mjs';
@@ -64,13 +65,10 @@ export function loadProgram(entryFile) {
   }
   for (const module of modules.values()) for (const cls of module.program.classes) {
     const enums = new Set(cls.members.filter(m => m.kind === 'enum').map(m => m.name));
-    const type = name => {
-      if (name.endsWith('?')) return type(name.slice(0, -1)) + '?';
-      if (name.endsWith('[]')) return type(name.slice(0, -2)) + '[]';
-      if (name.startsWith('List<')) return 'List<' + type(name.slice(5, -1)) + '>';
-      if ([...primitiveTypes, 'void'].includes(name) || enums.has(name)) return name;
-      return module.aliases.get(name) ?? name;
-    };
+    const type = name => mapType(name, base => {
+      if ([...primitiveTypes, 'void', 'List', ...(cls.typeParams ?? [])].includes(base) || enums.has(base)) return base;
+      return module.aliases.get(base) ?? base;
+    });
     const walk = node => {
       if (!node || typeof node !== 'object') return;
       if (Array.isArray(node)) { node.forEach(walk); return; }

@@ -50,11 +50,13 @@ public class Connection {
 | Classes, constructors, instance/static methods, encapsulation | Implemented for the bootstrap subset |
 | Static typing | Initial checker implemented: all bodies, names, members, calls, assignments, returns, access, and operators; runtime checks retained |
 | Interfaces | Implemented: nominal adoption, multiple contracts, exact signature checks, and dynamic dispatch |
-| Inheritance | Planned |
+| Inheritance | Implemented: one parent, required override, abstract classes/methods, super constructors and parent calls |
+| Packages and imports | Implemented: qualified type identity, explicit imports, file loading, and source diagnostics |
 | Initialization checking | Implemented for local control flow, field initialization order, and successful constructor paths; runtime alias checks retained |
 | Primitive numeric system | Implemented: checked widths, exact long, binary32 float, conversions, and integral division |
-| Arrays and first collection | Implemented: fixed-length mutable arrays and List<A> |
-| User-defined generics and exceptions | Planned; built-in List<A> is supported, but no user-defined generics or throw/catch yet |
+| Arrays and first collection | Implemented: fixed-length mutable arrays, List<A>, and expressive string/container methods |
+| User-defined generics | Implemented for classes/interfaces using A, nested arguments, inheritance, and imports; bounds and generic methods remain planned |
+| User-defined exceptions | Planned; no throw/catch yet |
 | Lifecycles and valid state transitions | Runtime guards and transitions implemented; compile-time state analysis planned |
 | Ownership and object relationships | Implemented for single concrete objects: one owning slot, optional managed back-reference, duplicate/cycle checks, detach/transfer |
 | Contracts | `require` preconditions implemented; postconditions and invariants planned |
@@ -93,9 +95,12 @@ It is implemented and intentionally omitted from ordinary CLI usage text. It req
 1. **Done:** first direct interpreter, examples, runtime guards, and loop behavior.
 2. **Done:** accepted syntax, Easter egg, and initial static checking before `check` and `run`.
 3. **Done:** definite-assignment analysis and constructor initialization checking.
-4. **Done:** interfaces; inheritance remains planned.
+4. **Done:** interfaces.
 5. **Done:** null safety followed by single-object ownership and automatic back-references.
 6. **Done:** renamed types, expanded primitives, defined arithmetic/conversions, and added arrays plus List<A>.
-7. Expand contracts, value features, optional memory control, and concurrency after their interaction rules are specified.
+7. **Done:** expressive string, List, and array methods.
+8. **Done:** inheritance, required overrides, abstract classes, and super.
+9. **Done:** packages/imports and user-defined generic classes/interfaces.
+10. Expand contracts, value features, optional memory control, and concurrency after their interaction rules are specified.
 
 The precise rules are in [objects and safety](objects-and-safety.md) and [values and collections](values-and-collections.md). Lifecycle correctness, ownership conflicts/cycles, initialization through arbitrary aliases/callbacks, overflow, and index safety retain runtime checks. Static checks do not execute user code and report the first error with a .k source location.

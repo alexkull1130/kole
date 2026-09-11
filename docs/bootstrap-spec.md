@@ -1,6 +1,6 @@
 # kole bootstrap specification
 
-Status: executable prototype, version 0.4.0. This document distinguishes implemented behavior from future goals. `.k`, `name: Type`, `method() -> Type`, `me`, and `for(i=0:10:+)` are settled requirements; loop endpoint/counter rules remain provisional. See [requirements](requirements.md), [objects and safety](objects-and-safety.md), and [values and collections](values-and-collections.md).
+Status: executable prototype, version 0.8.0. This document distinguishes implemented behavior from future goals. `.k`, `name: Type`, `method() -> Type`, `me`, and `for(i=0:10:+)` are settled requirements; loop endpoint/counter rules remain provisional. See [requirements](requirements.md), [objects and safety](objects-and-safety.md), and [values and collections](values-and-collections.md).
 
 ## Execution model
 
@@ -8,11 +8,11 @@ The lexer produces tokens with source locations. The parser builds an abstract s
 
 The implementation is hosted by Node.js for bootstrapping. It is not yet a native executable or a machine-code compiler. It does not use JavaScript `eval` or `Function` to execute source programs.
 
-Each source file is self-contained and may contain multiple classes. The entry class matches the file's base name and provides `public static main() -> void` or `public static main(args: string[]) -> void`. Omitted member visibility defaults to public. Classes have one optional constructor named after the class, such as `Point(x: int, y: int) { ... }`, without a return arrow. Constructor and method overloading are not supported. Fields, locals, and parameters use `name: Type`. Legacy type-first declarations remain temporarily accepted for bootstrap compatibility.
+Each source file may contain multiple classes and explicitly import other files or packaged types; see [modules](modules.md). The entry class matches the file's base name and provides `public static main() -> void` or `public static main(args: string[]) -> void`. Omitted member visibility defaults to public. Classes have one optional constructor named after the class, such as `Point(x: int, y: int) { ... }`, without a return arrow. Constructor and method overloading are not supported. Fields, locals, and parameters use `name: Type`. Legacy type-first declarations remain temporarily accepted for bootstrap compatibility.
 
 ## Objects and values
 
-Fields belong to individual objects. Methods can access their own private fields and private methods, including those on other instances of the same class. External classes cannot. `me` names the current object; static methods have no `me`, and `this` is rejected. Nominal interfaces are declared with `interface` and adopted with `implements`. Static fields, inheritance, imports, and packages are not implemented yet.
+Fields belong to individual objects. Methods can access their own private fields and private methods, including those on other instances of the same class. External classes cannot. `me` names the current object; static methods have no `me`, and `this` is rejected. Nominal interfaces are declared with `interface` and adopted with `implements`. Single class inheritance, required override, abstract classes/methods, and super are implemented; see [inheritance](inheritance.md). Static fields and interface inheritance remain planned.
 
 Variables, fields, parameters, and returns carry declared types. The checker validates names, member access, assignments, call arguments, operators, condition types, and return types and paths before execution. Enum types retain their declaring class identity. Definite assignment checks local reads and requires fields to be initialized on all successful constructor paths. Runtime type and uninitialized-read checks remain as a backstop, including for aliases outside the intraprocedural analysis.
 
@@ -73,4 +73,4 @@ CLI language errors use `file.k:line:column: message` and exit with status 1. Us
 
 ## Not implemented
 
-Ownership collections and explicit inverse selection, atomic blocks, general variable type inference, interprocedural initialization analysis, static lifecycle analysis, immutable-by-default values, data classes, properties, sealed types/pattern matching, user-defined generics, inheritance, interface default methods/inheritance, user-defined exceptions, modules, maps/sets/iterators, custom loop steps, concurrency, optional memory control, and native code generation. Array-literal element inference and built-in List<A> are implemented.
+Ownership collections and explicit inverse selection, atomic blocks, general variable type inference, interprocedural initialization analysis, static lifecycle analysis, immutable-by-default values, data classes, properties, sealed types/pattern matching, generic methods and bounds, interface default methods/inheritance, user-defined exceptions, maps/sets/iterators, custom loop steps, concurrency, optional memory control, and native code generation. Array-literal element inference, expressive string/container methods, built-in List<A>, and user-defined generic classes/interfaces are implemented; see [generics](generics.md).

@@ -64,7 +64,7 @@ class Checker {
     if (object.kind === 'value' && (object.type === 'string' || object.type.endsWith('[]') || object.type.startsWith('List<')) && name === 'length') return value('int');
     if (object.kind === 'value') {
       const signature = builtinSignature(object.type, name);
-      if (signature) return { kind: 'listMethod', name, params: signature[0], returns: signature[1] };
+      if (signature) return { kind: 'listMethod', receiverType: object.type, name, params: signature[0], returns: signature[1] };
       if (object.type.startsWith('List<')) this.fail(node, `Unknown member '${name}' on ${object.type}`);
     }
     if (object.kind === 'enum') {
@@ -98,7 +98,7 @@ class Checker {
     const local = scope.find(name);
     if (local) return { ...local, type: scope.facts.get(local) ?? local.type, declaredType: local.type, binding: local };
     if (scope.instance && scope.owner.fields.has(name)) return this.field(scope.owner, scope.owner.fields.get(name), scope, node);
-    if (scope.owner.enums.has(name)) return { kind: 'enum', cls: scope.owner, enum: scope.owner.enums.get(name) };
+    if (scope.owner.enums.has(name)) { const enumeration = scope.owner.enums.get(name); this.access(enumeration.declaration, scope.owner, scope, node); return { kind: 'enum', cls: scope.owner, enum: enumeration }; }
     if (scope.owner.lifecycle) {
       const enumeration = scope.owner.enums.get(scope.owner.lifecycle.type);
       if (enumeration.values.has(name)) return value(`${enumeration.owner}.${enumeration.name}`);
@@ -191,6 +191,7 @@ class Checker {
       case 'new': {
         const cls = this.classes.get(node.name);
         if (!cls) this.fail(node, `Unknown class '${node.name}'`);
+        this.type(node.name, scope.owner, node);
         if (cls.isAbstract) this.fail(node, `Cannot construct abstract class '${node.name}'`);
         if (cls.kind === 'interface') this.fail(node, `Cannot construct interface '${node.name}'`);
         const constructor = cls.methods.get(cls.name);
@@ -241,7 +242,7 @@ class Checker {
           return value(callee.type);
         }
         if (callee.kind === 'listMethod') {
-          if (node.args.length !== callee.params.length) this.fail(node, `List.${callee.name} expects ${callee.params.length} arguments`);
+          if (node.args.length !== callee.params.length) this.fail(node, `${callee.receiverType}.${callee.name} expects ${callee.params.length} arguments`);
           callee.params.forEach((type, i) => this.expect(type, this.expression(node.args[i], scope, type), node.args[i]));
           return value(callee.returns);
         }

@@ -49,3 +49,6 @@ test('super constructor placement, arity, privacy and initialization are checked
 test('constructor virtual dispatch cannot read uninitialized subclass fields',()=> {
  assert.throws(()=>exec('class A {A(){f();} f() -> void {}} class B extends A {x:int=7; override f() -> void {print(x);}} class Main {static main() -> void {b:B=new B();}}'),/before all fields/);
 });
+test('inherited private enums cannot be accessed through parent or child names',()=> {
+ for(const expression of ['State.X','B.State.X','A.State.X']) assert.throws(()=>valid('class A {private enum State{X}} class B extends A {f() -> void {print('+expression+');}}'),/private/);
+});

@@ -51,7 +51,7 @@ Interfaces contain public instance method signatures ending in `;`. They have no
 
 Each required method must be public and nonstatic, with exactly matching parameter and return types. Parameter names need not match. Implementations cannot add lifecycle guards to an unrestricted interface method. Missing, incompatible, and conflicting requirements are errors before execution.
 
-Interface types are accepted for variables, parameters, fields, returns, and nullable references. Calls dispatch to the object's concrete implementation. An interface-typed reference exposes only the interface's declared methods. Interfaces cannot be instantiated. Interface inheritance and class inheritance remain unimplemented.
+Interface types are accepted for variables, parameters, fields, returns, and nullable references. Calls dispatch to the object's concrete implementation. An interface-typed reference exposes only the interface's declared methods. Interfaces cannot be instantiated. Class inheritance is implemented; see [inheritance](inheritance.md). Interface inheritance remains planned.
 
 Try `kole run examples/Interfaces.k`.
 

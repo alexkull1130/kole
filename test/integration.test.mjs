@@ -40,6 +40,9 @@ test('all four milestones work together with me and lifecycle methods', () => {
 test('new milestone examples pass CLI checking and run', () => {
   const root = fileURLToPath(new URL('../', import.meta.url));
   const expected = {
+    Methods: 'ALEX KULL\nAlex built Kull kole\ntrue [built, Kull]',
+    Inheritance: 'Rex says woof', 'multifile/Main': 'Rex says woof',
+    Generics: '42\nAlex\nKull\nALEX',
     Initialization: 'kole', Interfaces: '(3, 4)',
     NullSafety: 'Hello, stranger\nHello, Alex length: 4',
     Relationships: 'Chapter one belongs to Ideas\nChapter one belongs to kole',

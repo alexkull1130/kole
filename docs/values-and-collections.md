@@ -1,4 +1,4 @@
-# Values and collections in kole 0.4
+# Values and collections in kole
 
 ## Built-in types
 
@@ -62,7 +62,7 @@ Arrays are invariant: an existing int[] cannot be assigned to long[], and a conc
 
 ## List<A>
 
-**A** is the generic parameter name. Use concrete types such as `List<int>` or `List<string>` in programs. User-defined generic classes/functions remain future work.
+**A** is the generic parameter name. Use concrete types such as `List<int>` or `List<string>` in programs. User-defined generic classes/interfaces are implemented; see [generics](generics.md). Generic method-specific parameters remain future work.
 
 ```text
 names: List<string> = new List<string>();
@@ -85,7 +85,7 @@ List indexing supports reads, assignments, and numeric updates. Its constructor 
 
 Indexed assignment resolves the receiver and index before evaluating the right-hand side, then rechecks bounds before writing in case that evaluation changed the List. Every write checks its element type. Arrays and Lists are capped at 100000 elements in this prototype.
 
-Collections do not imply ownership of their elements. `owns`/`belongsTo` still apply only to single concrete objects. Maps, sets, iterators, resizing arrays, user-defined generics, and ownership of collections remain planned.
+Collections do not imply ownership of their elements. `owns`/`belongsTo` still apply only to single concrete objects. Maps, sets, iterators, resizing arrays and ownership of collections remain planned.
 
 ## Try it
 

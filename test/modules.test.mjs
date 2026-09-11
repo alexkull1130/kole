@@ -38,3 +38,13 @@ test('packaged lifecycle enums remain properly qualified',()=>fixture({
  'Main.k':'import app.Counter; class Main {static main() -> void {c:Counter=new Counter();c.close();print(c.read());}}',
  'app/Counter.k':'package app; class Counter {enum State{OPEN,CLOSED} private state status:State=OPEN; close() -> void transitions OPEN -> CLOSED {} read() -> int requires CLOSED {return 1;}}'
 },root=>assert.deepEqual(exec(path.join(root,'Main.k')).lines,['1'])));
+// integration cases for generic modules
+test('imported generic classes work with caller-defined argument types',()=>fixture({
+ 'Main.k':'import lib.Box; class Item {name:string="kole";} class Main {static main() -> void {b:Box<Item>=new Box<Item>(new Item());print(b.get().name);}}',
+ 'lib/Box.k':'package lib; class Box<A> {private item:A;Box(item:A){me.item=item;}get() -> A{return item;}}'
+},root=>assert.deepEqual(exec(path.join(root,'Main.k')).lines,['kole'])));
+test('imported generic inheritance and interface types are canonical',()=>fixture({
+ 'Main.k':'import lib.Box; import lib.Value; class Main {static main() -> void {v:Value<int>=new Box<int>(5);print(v.get());}}',
+ 'lib/Value.k':'package lib; interface Value<A>{get() -> A;}',
+ 'lib/Box.k':'package lib; import lib.Value; class Box<A> implements Value<A>{item:A;Box(item:A){me.item=item;}get() -> A{return item;}}'
+},root=>assert.deepEqual(exec(path.join(root,'Main.k')).lines,['5'])));

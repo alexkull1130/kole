@@ -1,3 +1,4 @@
+import { specializeGenerics, genericParts } from './generics.mjs';
 import { linkInheritance, isSubtype } from './inheritance.mjs';
 import { builtinSignature, callBuiltin } from './builtins.mjs';
 import { KoleError } from './lexer.mjs';
@@ -16,10 +17,11 @@ class Scope {
 
 export class Runtime {
   constructor(program, { print = console.log, maxSteps = 1_000_000 } = {}) {
+    program = specializeGenerics(program);
     this.classes = new Map(); this.print = print; this.steps = 0; this.maxSteps = maxSteps; this.depth = 0;
     for (const declaration of program.classes) {
       if (this.classes.has(declaration.name) || [...primitiveTypes, 'boolean', 'String', 'double', 'List', 'void', 'print'].includes(declaration.name)) this.fail(declaration, `Duplicate or reserved class '${declaration.name}'`);
-      this.classes.set(declaration.name, { kind: declaration.isInterface ? 'interface' : 'class', name: declaration.name, aliases: declaration.aliases, fields: new Map(), methods: new Map(), enums: new Map(), declaration, lifecycle: null, interfaces: new Set(declaration.interfaces ?? []) });
+      this.classes.set(declaration.name, { kind: declaration.isInterface ? 'interface' : 'class', name: declaration.name, aliases: declaration.aliases, genericBase: declaration.genericBase, fields: new Map(), methods: new Map(), enums: new Map(), declaration, lifecycle: null, interfaces: new Set(declaration.interfaces ?? []) });
     }
     for (const cls of this.classes.values()) {
       const names = new Set();
@@ -61,6 +63,7 @@ export class Runtime {
       }
     }
     for (const cls of this.classes.values()) {
+      for (const arg of cls.declaration.typeArguments ?? []) this.validateType(arg, null, cls.declaration);
       for (const field of cls.fields.values()) this.validateType(field.type, field.owner ?? cls, field);
       for (const method of cls.methods.values()) {
         if (method.type !== 'void') this.validateType(method.type, method.owner ?? cls, method);
@@ -102,7 +105,12 @@ export class Runtime {
     if (type.endsWith('?')) return this.validateType(type.slice(0, -1), owner, node);
     if (type.endsWith('[]')) return this.validateType(type.slice(0, -2), owner, node);
     if (type.startsWith('List<') && type.endsWith('>')) return this.validateType(type.slice(5, -1), owner, node);
-    if (this.classes.has(type) && owner?.aliases && ![...owner.aliases.values()].includes(type)) this.fail(node, `Type '${type}' must be imported in this file`);
+    const generic = genericParts(type);
+    if (generic) for (const arg of generic.args) this.validateType(arg, owner, node);
+    if (this.classes.has(type) && !type.startsWith('#') && owner?.aliases) {
+      const visible = [...owner.aliases.values()].some(alias => alias === type || (generic && (alias === generic.base || genericParts(alias)?.base === generic.base)));
+      if (!visible) this.fail(node, `Type '${type}' must be imported in this file`);
+    }
     const parts = type.split('.');
     if (parts.length >= 2 && this.classes.get(parts.slice(0, -1).join('.'))?.enums.has(parts.at(-1))) return;
     if (!primitiveTypes.includes(type) && !this.classes.has(type) && !owner?.enums.has(type)) this.fail(node, `Unknown type '${type}'`);
@@ -250,7 +258,7 @@ export class Runtime {
     const binding = scope.find(name);
     if (binding) return this.read(binding, node);
     if (scope.self && scope.owner.fields.has(name)) return this.member(scope.self, name, scope, node);
-    if (scope.owner?.enums.has(name)) return scope.owner.enums.get(name);
+    if (scope.owner?.enums.has(name)) { const enumeration = scope.owner.enums.get(name); this.access(enumeration.declaration, scope.owner, scope, node); return enumeration; }
     // Bare state names refer to the current class's lifecycle enum.
     if (scope.owner?.lifecycle) {
       const value = scope.owner.enums.get(scope.owner.lifecycle.type).values.get(name);
@@ -457,6 +465,7 @@ export class Runtime {
     }
   }
   invoke({ cls, self, method }, args, node) {
+    cls = method.owner ?? cls;
     if (method.isAbstract || !method.body) this.fail(node, 'Cannot invoke an abstract method');
     if (self?.constructing && [...self.fields.values()].some(binding => binding.value === UNSET)) this.fail(node, 'Cannot call an instance method before all fields are initialized');
     if (args.length !== method.params.length) this.fail(node, `${method.name} expects ${method.params.length} arguments, got ${args.length}`);

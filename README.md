@@ -4,7 +4,7 @@ kole is a Java-inspired, object-oriented programming language. Its working direc
 
 The agreed syntax, full feature roadmap, optional memory management, and Alex Kull Easter egg are recorded in [requirements](docs/requirements.md).
 
-Version 0.4 adds checked primitive arithmetic, exact long values, Unicode chars, mutable arrays, and `List<A>`. Type names are `byte`, `short`, `int`, `long`, `float`, `char`, `bool`, and `string`; `double` is not supported. See [values and collections](docs/values-and-collections.md). The existing OOP rules are in [objects and safety](docs/objects-and-safety.md). The current-object keyword is **`me`**.
+Version 0.8 includes expressive string/collection methods, class inheritance, required overrides, abstract classes, parent access, packages/imports, and user-defined generic classes/interfaces. Type names are `byte`, `short`, `int`, `long`, `float`, `char`, `bool`, and `string`; `double` is not supported. See [values and collections](docs/values-and-collections.md). The existing OOP rules are in [objects and safety](docs/objects-and-safety.md). The current-object keyword is **`me`**.
 
 This folder contains the first working kole interpreter. kole has its own lexer, parser, object model, and execution engine. It does not depend on Java, the JVM, or Java libraries, and does not translate programs into Java or JavaScript.
 
@@ -25,6 +25,10 @@ Open a terminal in this folder:
 .\kole.cmd run examples\Relationships.k
 .\kole.cmd run examples\Primitives.k
 .\kole.cmd run examples\Collections.k
+.\kole.cmd run examples\Methods.k
+.\kole.cmd run examples\Inheritance.k
+.\kole.cmd run examples\multifile\Main.k
+.\kole.cmd run examples\Generics.k
 ```
 
 On any platform with Node.js:
@@ -41,7 +45,9 @@ node --test
 
 ## Implemented in the bootstrap
 
-- `.k` files, multiple classes in one file, constructors, instance and static methods.
+- `.k` files, packages and imports across files, constructors, instance and static methods.
+- Single class inheritance, required `override`, abstract classes/methods, and `super(...)` / `super.method()`.
+- User-defined generic classes and interfaces, such as `Box<A>` and `Value<A>`.
 - Distinctive `name: Type` declarations and `method() -> ReturnType` signatures.
 - Public/private member access, per-instance fields, `me`, and object references.
 - Definite assignment for locals and constructor fields, plus nominal interfaces with checked implementations.
@@ -53,6 +59,8 @@ node --test
 - Explicit range loops, nested loops, `while`, `if`/`else`, `break`, `continue`, and `return`.
 - Local enums, private lifecycle fields, method state guards, successful state transitions, and `require` preconditions.
 - Unicode scalar string length/indexing, mutable fixed-length arrays, and built-in List<A>.
+
+See [inheritance](docs/inheritance.md), [modules](docs/modules.md), and [generics](docs/generics.md) for the new features.
 
 See [the bootstrap specification](docs/bootstrap-spec.md) for exact behavior and limitations. The remaining sections record the broader language direction; they are not claims that all proposed features exist.
 
@@ -70,7 +78,7 @@ See [the bootstrap specification](docs/bootstrap-spec.md) for exact behavior and
 - Data classes with generated constructors, equality, and readable printing.
 - Sealed types and exhaustive pattern matching.
 - Properties with controlled access.
-- Class/interface inheritance, user-defined generics, and user-defined exceptions.
+- Interface inheritance/default methods, constrained generics and generic methods, and user-defined exceptions.
 - Compile-time lifecycle analysis where possible; guards currently run at runtime.
 
 ## Further candidates
@@ -138,7 +146,7 @@ public class Order {
 1. Refine the runnable Point, Order, Connection, and loop examples against the intended language design.
 2. Expand initialization analysis across aliases and helper calls, and design static lifecycle analysis.
 3. Extend single-object relationships to collections and richer associations.
-4. Design inheritance, data classes, properties, and sealed types.
+4. Design data classes, properties, and sealed types.
 5. Decide on a native runtime/compiler implementation after stabilizing the core semantics.
 
 Java is a design influence only. Java source compatibility, Java interoperability, and JVM targeting are not requirements for kole.

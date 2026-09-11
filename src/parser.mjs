@@ -28,8 +28,8 @@ class Parser {
     let type = this.name();
     if (['boolean', 'String', 'double'].includes(type)) throw new KoleError(`Use '${{ boolean: 'bool', String: 'string', double: 'float' }[type]}' instead of '${type}'`, this.tokens[this.pos - 1]);
     if (this.match('<')) {
-      if (type !== 'List') throw new KoleError('Only the built-in List currently supports type arguments', this.peek());
       type += '<' + this.type();
+      while (this.match(',')) type += ',' + this.type();
       if (this.at('>=')) {
         const close = this.take(); this.tokens.splice(this.pos, 0, { ...close, text: '=', column: close.column + 1 });
       } else this.expect('>');
@@ -78,9 +78,17 @@ class Parser {
     this.match('public'); const isAbstract = !!this.match('abstract'); const isInterface = !!this.match('interface');
     if (!isInterface) this.expect('class');
     const name = this.name();
+    const typeParams = [];
+    if (this.match('<')) {
+      do { const param = this.name();
+        if (typeParams.includes(param) || ['byte','short','int','long','float','char','bool','string','List','void',name].includes(param)) throw new KoleError('Duplicate or reserved type parameter', this.peek());
+        typeParams.push(param);
+      } while (this.match(','));
+      this.expect('>');
+    }
     const parent = !isInterface && this.match('extends') ? this.type() : null;
     const interfaces = [];
-    if (!isInterface && this.match('implements')) do { interfaces.push(this.name()); } while (this.match(','));
+    if (!isInterface && this.match('implements')) do { interfaces.push(this.type()); } while (this.match(','));
     this.expect('{');
     const members = [];
     while (!this.at('}')) {
@@ -147,7 +155,7 @@ class Parser {
       }
     }
     this.expect('}');
-    return { name, members, token, isInterface, interfaces, parent, isAbstract };
+    return { name, members, token, isInterface, interfaces, parent, isAbstract, typeParams };
   }
   block() {
     const token = this.expect('{'), statements = [];
