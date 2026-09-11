@@ -1,9 +1,9 @@
 class Generics {
     static main() -> void {
-        numbers: Box<int> = new Box<int>(42);
-        names: List<Box<string>> = new List<Box<string>>();
-        names.add(new Box<string>("Alex"));
-        names.add(new Box<string>("Kull"));
+        numbers: Box<int>(42);
+        names: List<Box<string>>();
+        names.add(Box<string>("Alex"));
+        names.add(Box<string>("Kull"));
         print(numbers.get());
         for(i=0:names.length:+) { print(names[i].get()); }
         source: Value<string> = names.first();

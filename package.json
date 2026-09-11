@@ -1,12 +1,13 @@
 {
   "name": "kole",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "private": true,
   "type": "module",
   "description": "The standalone kole language interpreter",
   "scripts": {
     "test": "node --test",
-    "start": "node src/cli.mjs"
+    "start": "node src/cli.mjs",
+    "package:vscode": "node scripts/package-vscode.mjs"
   },
   "engines": {
     "node": ">=18"

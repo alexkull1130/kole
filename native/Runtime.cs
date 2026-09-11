@@ -603,6 +603,7 @@ sealed class Runtime
             case "call":
                 var callee = Eval(node.Callee!, scope);
                 var args = node.Args.Select(a => Eval(a, scope)).ToList();
+                if (callee is Class constructedClass) return Create(constructedClass.Name, args, scope.Owner, node);
                 if (callee is PrintFunction)
                 {
                     Print(string.Join(' ', args.Select(x => Format(x))));

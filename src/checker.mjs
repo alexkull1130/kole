@@ -232,6 +232,7 @@ class Checker {
       }
       case 'call': {
         const callee = this.expression(node.callee, scope);
+        if (callee.kind === 'class') return this.expression({ ...node, kind: 'new', name: callee.cls.name }, scope);
         if (callee.kind === 'print') { node.args.forEach(arg => this.requireValue(this.expression(arg, scope), arg)); return value('void'); }
         if (callee.kind === 'conversion') {
           if (node.args.length !== 1) this.fail(node, `${callee.type} conversion expects one argument`);

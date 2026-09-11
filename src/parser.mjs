@@ -116,7 +116,7 @@ class Parser {
         // Temporary compatibility with programs written for the first bootstrap.
         type = this.type(); memberName = this.name();
       }
-      if (this.match('(')) {
+      if (!(modern && type && !constructor) && this.match('(')) {
         if (modern && type && !constructor) throw new KoleError('Methods use name(parameters) -> Type, not name: Type(parameters)', token);
         if (lifecycle || relationship) throw new KoleError('state, owns, and belongsTo apply to fields only', token);
         const params = [];
@@ -149,7 +149,8 @@ class Parser {
         if (isInterface) throw new KoleError('Interfaces contain method signatures only', token);
         if (modifiers.isAbstract || modifiers.isOverride) throw new KoleError('abstract and override apply to methods only', token);
         if (modifiers.isStatic) throw new KoleError('Static fields are not implemented yet', token);
-        const init = this.match('=') ? this.expression() : null;
+        const init = this.at('(') ? this.construct(type, token) : this.match('=') ? this.expression() : null;
+        if (this.at('->')) throw new KoleError('Methods use name(parameters) -> Type', token);
         this.expect(';');
         members.push({ kind: 'field', name: memberName, type, init, lifecycle, relationship, token, ...modifiers });
       }
@@ -221,7 +222,7 @@ class Parser {
     }
     if (token.kind === 'identifier' && !reserved.has(token.text) && this.peek(1).text === ':') {
       const name = this.name(); this.expect(':'); const type = this.type();
-      const value = this.match('=') ? this.expression() : null;
+      const value = this.at('(') ? this.construct(type, token) : this.match('=') ? this.expression() : null;
       this.expect(';'); return { kind: 'declare', type, name, value, token };
     }
     // A declaration begins with a type name (optionally array brackets) and a name.
@@ -275,6 +276,10 @@ class Parser {
     if (!this.at(')')) do { args.push(this.expression()); } while (this.match(','));
     this.expect(')'); return args;
   }
+  construct(name, token) {
+    this.expect('(');
+    return { kind: name.startsWith('List<') && name.endsWith('>') ? 'newList' : 'new', name, args: this.arguments(), token };
+  }
   primary() {
     const token = this.peek();
     if (token.kind === 'number') { this.take(); return { kind: 'literal', value: literalNumber(token.text, token), token }; }
@@ -298,6 +303,13 @@ class Parser {
     if (this.match('super')) return { kind: 'name', name: 'super', token };
     if (this.match('me')) return { kind: 'name', name: 'me', token };
     if (this.at('this')) throw new KoleError("Use 'me' for the current object in kole", token);
+    if (token.kind === 'identifier' && this.peek(1).text === '<') {
+      const pos = this.pos, tokens = [...this.tokens];
+      let name;
+      try { name = this.type(); } catch { /* May be a comparison. */ }
+      if (name && this.at('(')) return this.construct(name, token);
+      this.pos = pos; this.tokens = tokens;
+    }
     if (token.kind === 'identifier') return { kind: 'name', name: this.name(), token };
     throw new KoleError(`Expected an expression, found '${token.text}'`, token);
   }

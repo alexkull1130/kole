@@ -1,6 +1,6 @@
 class Inheritance {
     static main() -> void {
-        pet: Animal = new Dog("Rex");
+        pet: Animal = Dog("Rex");
         print(pet.speak());
     }
 }

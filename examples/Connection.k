@@ -16,7 +16,7 @@ public class Connection {
     }
 
     public static main() -> void {
-        connection: Connection = new Connection();
+        connection: Connection();
         connection.open();
         connection.send("Hello, kole");
         connection.close();

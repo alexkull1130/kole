@@ -339,6 +339,7 @@ sealed class Checker(Runtime runtime)
                 return Value(arrayElement + "[]");
             case "call":
                 var callee = Expression(node.Callee!, scope);
+                if (callee.Kind == "class") return Expression(new Node("new", node.Token) { Name = callee.Class!.Name, Args = node.Args }, scope);
                 if (callee.Kind == "print")
                 {
                     foreach (var arg in node.Args)

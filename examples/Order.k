@@ -19,7 +19,7 @@ public class Order {
     public ship() -> void transitions PLACED -> SHIPPED { print("Shipped"); }
 
     public static main() -> void {
-        order: Order = new Order(new Customer("Alex"));
+        order: Order(Customer("Alex"));
         for(i=0:3:+) { order.addItem(); }
         order.place();
         order.ship();

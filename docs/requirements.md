@@ -7,7 +7,7 @@ This is the working record of the language direction agreed with Alex Kull. Feat
 - Name: **kole**. Source extension: **`.k`**.
 - An independent, object-oriented language inspired by Java's principles.
 - Its own grammar, type system, object model, and runtime; no Java or JVM dependency.
-- Standalone native distribution without a separate Node/Java/Python installation is a requirement. The current prototype still uses Node.js; replacing that host is separate work.
+- Standalone native distribution without a separate Node/Java/Python installation is a requirement. Implemented on Windows with the Native AOT executable; the JavaScript reference implementation remains for development.
 - Familiar classes and encapsulation, combined with distinctive syntax, explicit relationships, lifecycles, and contracts.
 
 ## Accepted syntax
@@ -25,7 +25,7 @@ public class Connection {
     }
 
     public static main() -> void {
-        connection: Connection = new Connection();
+        connection: Connection();
         connection.open();
         for(i=0:10:+) { connection.send("hello"); }
     }
@@ -41,6 +41,7 @@ public class Connection {
 - Primitive names are **byte, short, int, long, float, char, bool, and string**. Do not introduce double; boolean and String are removed names.
 - Use **A** as the generic parameter name, as in **List<A>**.
 - Endpoint exclusion, read-only loop counters, and unit steps are current provisional rules; custom steps remain a design question.
+- Construction: `names: List<string>();` declares and constructs; `names = List<string>();` reassigns. The same forms apply to user classes.
 - Earlier type-first bootstrap syntax is temporarily accepted for compatibility. All maintained examples use the new syntax.
 
 ## Feature roadmap
@@ -56,7 +57,7 @@ public class Connection {
 | Primitive numeric system | Implemented: checked widths, exact long, binary32 float, conversions, and integral division |
 | Arrays and first collection | Implemented: fixed-length mutable arrays, List<A>, and expressive string/container methods |
 | User-defined generics | Implemented for classes/interfaces using A, nested arguments, inheritance, and imports; bounds and generic methods remain planned |
-| User-defined exceptions | Planned; no throw/catch yet |
+| User-defined exceptions | Implemented: Error subclasses, throw, try/catch/finally, stack traces |
 | Lifecycles and valid state transitions | Runtime guards and transitions implemented; compile-time state analysis planned |
 | Ownership and object relationships | Implemented for single concrete objects: one owning slot, optional managed back-reference, duplicate/cycle checks, detach/transfer |
 | Contracts | `require` preconditions implemented; postconditions and invariants planned |
@@ -67,7 +68,7 @@ public class Connection {
 | Sealed types and exhaustive pattern matching | Planned |
 | Structured concurrency | Planned task ownership, lifetimes, and cancellation |
 | Atomic transitions | Planned rollback for lifecycle and owned in-memory changes; not arbitrary external side effects |
-| Optional memory control | Planned as described below |
+| Optional memory control | Deterministic using/Closeable resource cleanup implemented; arenas and manual allocation planned |
 
 ## Optional memory management
 
@@ -101,6 +102,8 @@ It is implemented and intentionally omitted from ordinary CLI usage text. It req
 7. **Done:** expressive string, List, and array methods.
 8. **Done:** inheritance, required overrides, abstract classes, and super.
 9. **Done:** packages/imports and user-defined generic classes/interfaces.
-10. Expand contracts, value features, optional memory control, and concurrency after their interaction rules are specified.
+10. **Done:** exceptions, console/files/math, scoped cleanup, and a persistent task manager.
+11. **Done:** standalone Windows executable, VS Code support, and concise construction syntax.
+12. Expand contracts, value features, optional memory control, and concurrency after their interaction rules are specified.
 
 The precise rules are in [objects and safety](objects-and-safety.md) and [values and collections](values-and-collections.md). Lifecycle correctness, ownership conflicts/cycles, initialization through arbitrary aliases/callbacks, overflow, and index safety retain runtime checks. Static checks do not execute user code and report the first error with a .k source location.

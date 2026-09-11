@@ -6,14 +6,14 @@ import { KoleError } from './lexer.mjs';
 import { primitiveTypes } from './numbers.mjs';
 
 /** Load a file graph once, then qualify types while retaining each file's name scope. */
-export function loadProgram(entryFile) {
+export function loadProgram(entryFile, { readFile = file => fs.readFileSync(file, 'utf8'), realpath = file => fs.realpathSync(file) } = {}) {
   const modules = new Map();
   const read = file => {
     if (path.extname(file) !== '.k') throw new KoleError('Source files must use .k', { file });
     try {
-      file = fs.realpathSync(file);
+      file = realpath(file);
       if (modules.has(file)) return modules.get(file);
-      const program = parse(fs.readFileSync(file, 'utf8'), file);
+      const program = parse(readFile(file), file);
       const module = { file, program, dependencies: [], aliases: new Map() };
       modules.set(file, module); return module;
     } catch (error) {

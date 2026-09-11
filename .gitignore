@@ -5,3 +5,5 @@ native/obj/
 dist/
 *.vsix
 tasks.txt
+
+/kole.exe

@@ -12,7 +12,7 @@ class Point implements Printable {
 class Interfaces {
     public static show(value: Printable) -> void { print(value.describe()); }
     public static main() -> void {
-        point: Printable = new Point(3, 4);
+        point: Printable = Point(3, 4);
         show(point);
     }
 }

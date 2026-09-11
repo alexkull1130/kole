@@ -6,7 +6,7 @@ Status: executable prototype, version 0.8.0. This document distinguishes impleme
 
 The lexer produces tokens with source locations. The parser builds an abstract syntax tree. A declaration-validation pass registers classes, checks duplicate members and declared field/parameter/return types, and validates lifecycle signatures. A static checker then validates every field initializer and method body, including uncalled methods and unreachable statements. The interpreter evaluates the checked tree using kole scopes, instances, calls, and control flow. There is no source translation, Java toolchain, or JVM dependency.
 
-The implementation is hosted by Node.js for bootstrapping. It is not yet a native executable or a machine-code compiler. It does not use JavaScript `eval` or `Function` to execute source programs.
+The reference implementation is hosted by Node.js for bootstrapping. A separate C# implementation ships as a standalone Windows executable using Native AOT. Kole source remains interpreted. It does not use JavaScript `eval` or `Function` to execute source programs.
 
 Each source file may contain multiple classes and explicitly import other files or packaged types; see [modules](modules.md). The entry class matches the file's base name and provides `public static main() -> void` or `public static main(args: string[]) -> void`. Omitted member visibility defaults to public. Classes have one optional constructor named after the class, such as `Point(x: int, y: int) { ... }`, without a return arrow. Constructor and method overloading are not supported. Fields, locals, and parameters use `name: Type`. Legacy type-first declarations remain temporarily accepted for bootstrap compatibility.
 
@@ -73,4 +73,6 @@ CLI language errors use `file.k:line:column: message` and exit with status 1. Us
 
 ## Not implemented
 
-Ownership collections and explicit inverse selection, atomic blocks, general variable type inference, interprocedural initialization analysis, static lifecycle analysis, immutable-by-default values, data classes, properties, sealed types/pattern matching, generic methods and bounds, interface default methods/inheritance, user-defined exceptions, maps/sets/iterators, custom loop steps, concurrency, optional memory control, and native code generation. Array-literal element inference, expressive string/container methods, built-in List<A>, and user-defined generic classes/interfaces are implemented; see [generics](generics.md).
+Ownership collections and explicit inverse selection, atomic blocks, general variable type inference, interprocedural initialization analysis, static lifecycle analysis, immutable-by-default values, data classes, properties, sealed types/pattern matching, generic methods and bounds, interface default methods/inheritance, maps/sets/iterators, custom loop steps, concurrency, arenas/manual allocation, and machine-code compilation of individual Kole programs. Array-literal element inference, expressive string/container methods, built-in List<A>, and user-defined generic classes/interfaces are implemented; see [generics](generics.md).
+
+Exceptions, file/console/math APIs, and deterministic resource cleanup are specified in [errors and library](errors-and-library.md). [Construction syntax](construction.md) covers the concise constructor forms.

@@ -29,9 +29,9 @@ Implicit widening follows `byte -> short -> int -> long -> float` across assignm
 
 ```text
 count: int = 12;
-small: byte = byte(count);
-whole: int = int(-3.9);       // -3
-ratio: float = float(count) / 5;
+small: byte(count);
+whole: int(-3.9);       // -3
+ratio: float(count) / 5;
 ```
 
 Numeric conversions accept one number or char. Float-to-integer conversion truncates toward zero and checks the destination range. Numeric strings are not parsed. Compound updates `+=`, `-=`, `++`, and `--` convert back to the destination type with checks; integral `+=`/`-=` with float includes truncation. Failed updates leave their destination unchanged.
@@ -65,7 +65,7 @@ Arrays are invariant: an existing int[] cannot be assigned to long[], and a conc
 **A** is the generic parameter name. Use concrete types such as `List<int>` or `List<string>` in programs. User-defined generic classes/interfaces are implemented; see [generics](generics.md). Generic method-specific parameters remain future work.
 
 ```text
-names: List<string> = new List<string>();
+names: List<string>();
 names.add("Alex");
 names.add("Kull");
 print(names.get(0), names[1], names.length);
@@ -81,7 +81,7 @@ print(names.get(0), names[1], names.length);
 | `clear() -> void` | Remove all elements |
 | `isEmpty() -> bool` | Test whether empty |
 
-List indexing supports reads, assignments, and numeric updates. Its constructor takes no arguments. Lists are invariant and can contain nullable/interface values, arrays, or nested Lists. Compact declarations such as `items: List<int>=new List<int>();` are accepted.
+List indexing supports reads, assignments, and numeric updates. Its constructor takes no arguments. Lists are invariant and can contain nullable/interface values, arrays, or nested Lists. Compact declarations such as `items: List<int>();` are accepted.
 
 Indexed assignment resolves the receiver and index before evaluating the right-hand side, then rechecks bounds before writing in case that evaluation changed the List. Every write checks its element type. Arrays and Lists are capped at 100000 elements in this prototype.
 

@@ -19,9 +19,9 @@ class Notebook {
 
 class Relationships {
     public static main() -> void {
-        page: Page = new Page("Chapter one");
-        first: Notebook = new Notebook("Ideas");
-        second: Notebook = new Notebook("kole");
+        page: Page("Chapter one");
+        first: Notebook("Ideas");
+        second: Notebook("kole");
         first.attach(page);
         page.describeOwner();
         first.detach();

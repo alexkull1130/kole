@@ -10,7 +10,7 @@ class Label {
 class Initialization {
     public static main() -> void {
         label: Label;
-        label = new Label(true);
+        label = Label(true);
         print(label.describe());
     }
 }

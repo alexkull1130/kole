@@ -5,7 +5,7 @@ class Collections {
         for(i=0:scores.length:+) { print("score", i, scores[i]); }
 
         // A is the generic parameter; this List supplies string for A.
-        names: List<string> = new List<string>();
+        names: List<string>();
         names.add("Alex");
         names.add("kole");
         print(names, names.length);

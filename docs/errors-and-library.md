@@ -1,6 +1,6 @@
 # Errors, resources, and standard library
 
-Use `throw new Error("message");`, `try { ... } catch(error: Error) { ... } finally { ... }`. Error has a message field; user classes may extend it. Catch clauses match subclasses in source order. Runtime faults (such as overflow, bounds errors, and failed preconditions) can be caught as RuntimeError. File failures are IOError. Static errors, interpreter limits, and internal implementation failures are not recoverable language exceptions. Uncaught errors include Kole call frames.
+Use `throw Error("message");`, `try { ... } catch(error: Error) { ... } finally { ... }`. Error has a message field; user classes may extend it. Catch clauses match subclasses in source order. Runtime faults (such as overflow, bounds errors, and failed preconditions) can be caught as RuntimeError. File failures are IOError. Static errors, interpreter limits, and internal implementation failures are not recoverable language exceptions. Uncaught errors include Kole call frames.
 
 Finally executes on success, error, return, break, and continue; a return or error from finally replaces the pending outcome. Catch variables are scoped to their handler. Definite-assignment analysis conservatively assumes an exception can occur before any assignment in try; initialize values before try if catch/finally reads them.
 

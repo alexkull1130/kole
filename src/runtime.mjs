@@ -382,6 +382,7 @@ export class Runtime {
       }
       case 'call': {
         const callee = this.eval(node.callee, scope), args = node.args.map(arg => this.eval(arg, scope));
+        if (['class', 'interface'].includes(callee?.kind)) return this.create(callee.name, args, scope, node);
         if (callee?.kind === 'print') { this.print(args.map(value => this.format(value)).join(' ')); return undefined; }
         if (callee?.kind === 'conversion') return this.convert(callee.type, args, node);
         if (callee?.kind === 'listMethod') return callBuiltin(this, callee, args, node);

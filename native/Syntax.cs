@@ -437,7 +437,7 @@ sealed class Parser(List<Token> tokens)
                 m.Type = Type();
                 m.Name = Name();
             }
-            if (Match("("))
+            if (!(modern && m.Type != "" && !m.Constructor) && Match("("))
             {
                 m.Kind = "method";
                 if (modern && m.Type != "" && !m.Constructor)
@@ -499,7 +499,9 @@ sealed class Parser(List<Token> tokens)
                 m.Kind = "field";
                 if (n.Interface || m.Static || m.Abstract || m.Override)
                     throw new Fault("Invalid field declaration", t);
-                if (Match("="))
+                if (At("("))
+                    m.Init = Construct(m.Type, t);
+                else if (Match("="))
                     m.Init = Expression();
                 Expect(";");
             }
@@ -632,7 +634,9 @@ sealed class Parser(List<Token> tokens)
             var n = new Node("declare", t) { Name = Name() };
             Expect(":");
             n.Type = Type();
-            if (Match("="))
+            if (At("("))
+                n.Value = Construct(n.Type, t);
+            else if (Match("="))
                 n.Value = Expression();
             Expect(";");
             return n;
@@ -748,6 +752,11 @@ sealed class Parser(List<Token> tokens)
         Expect(")");
         return args;
     }
+    Node Construct(string name, Token token)
+    {
+        Expect("(");
+        return new(name.StartsWith("List<") && name.EndsWith('>') ? "newList" : "new", token) { Name = name, Args = Arguments() };
+    }
     Node Primary()
     {
         var t = Peek();
@@ -825,6 +834,15 @@ sealed class Parser(List<Token> tokens)
             };
         if (At("this"))
             throw new Fault("Use 'me' for the current object in kole", t);
+        if (t.Kind == "identifier" && Peek(1).Text == "<")
+        {
+            int saved = pos;
+            var original = tokens.ToList();
+            string? name = null;
+            try { name = Type(); } catch (Fault) { }
+            if (name is not null && At("(")) return Construct(name, t);
+            pos = saved; tokens.Clear(); tokens.AddRange(original);
+        }
         if (t.Kind == "identifier")
             return new("name", t)
             {

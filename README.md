@@ -4,18 +4,19 @@ kole is a Java-inspired, object-oriented programming language. Its working direc
 
 The agreed syntax, full feature roadmap, optional memory management, and Alex Kull Easter egg are recorded in [requirements](docs/requirements.md).
 
-Version 0.9 adds exceptions, scoped cleanup, console/file/math APIs, and a file-backed task manager (see [errors and library](docs/errors-and-library.md)). It also includes expressive string/collection methods, class inheritance, required overrides, abstract classes, parent access, packages/imports, and user-defined generic classes/interfaces. Type names are `byte`, `short`, `int`, `long`, `float`, `char`, `bool`, and `string`; `double` is not supported. See [values and collections](docs/values-and-collections.md). The existing OOP rules are in [objects and safety](docs/objects-and-safety.md). The current-object keyword is **`me`**.
+Version 0.10 adds a standalone Windows executable, VS Code language support, and concise construction syntax. It includes exceptions, scoped cleanup, console/file/math APIs, and a file-backed task manager (see [errors and library](docs/errors-and-library.md)). It also includes expressive string/collection methods, class inheritance, required overrides, abstract classes, parent access, packages/imports, and user-defined generic classes/interfaces. Type names are `byte`, `short`, `int`, `long`, `float`, `char`, `bool`, and `string`; `double` is not supported. See [values and collections](docs/values-and-collections.md). The existing OOP rules are in [objects and safety](docs/objects-and-safety.md). The current-object keyword is **`me`**.
 
 This folder contains the first working kole interpreter. kole has its own lexer, parser, object model, and execution engine. It does not depend on Java, the JVM, or Java libraries, and does not translate programs into Java or JavaScript.
 
-The bootstrap interpreter is implemented in JavaScript and currently requires Node.js 18 or newer as its host. A native implementation can replace this host later without changing the language design. No external packages are required.
+Run the standalone Windows `kole.exe` without installing Node.js, Java, or .NET. The native interpreter is implemented in C# and compiled with Native AOT. A JavaScript reference implementation remains for development and tests. See [native builds](docs/native.md) and [VS Code support](docs/editor.md).
 
 ## Run kole
 
-Open a terminal in this folder:
+Download `kole.exe` from the private repository release (or Native Windows build artifact) and place it in this folder. Open a terminal here:
 
 ```powershell
 .\kole.cmd run examples\Hello.k
+.\kole.cmd run examples\tasks\TaskManager.k tasks.txt
 .\kole.cmd run examples\Point.k
 .\kole.cmd run examples\Connection.k
 .\kole.cmd run examples\Order.k
@@ -43,7 +44,7 @@ node --test
 
 `check` validates declarations, field initializers, and every method body without executing the program. It catches unknown names/members, incorrect types and arguments, access violations, invalid assignments, missing return paths, uninitialized locals, incomplete constructor paths, interface mismatches, and unsafe nullable access. Lifecycle state, ownership conflicts/cycles, overflow, index safety, and alias-related initialization hazards retain runtime checks. Errors identify the `.k` source line and column and return a nonzero exit status.
 
-## Implemented in the bootstrap
+## Implemented
 
 - `.k` files, packages and imports across files, constructors, instance and static methods.
 - Single class inheritance, required `override`, abstract classes/methods, and `super(...)` / `super.method()`.
@@ -78,7 +79,7 @@ See [the bootstrap specification](docs/bootstrap-spec.md) for exact behavior and
 - Data classes with generated constructors, equality, and readable printing.
 - Sealed types and exhaustive pattern matching.
 - Properties with controlled access.
-- Interface inheritance/default methods, constrained generics and generic methods, and user-defined exceptions.
+- Interface inheritance/default methods, constrained generics, and generic methods.
 - Compile-time lifecycle analysis where possible; guards currently run at runtime.
 
 ## Further candidates
@@ -125,7 +126,7 @@ public class Order {
 
     private state status: State = DRAFT;
     private belongsTo customer: Customer?;
-    private owns items: List<OrderItem> = new List<OrderItem>();
+    private owns items: List<OrderItem> = List<OrderItem>();
 
     public add(item: OrderItem) -> void requires DRAFT {
         items.add(item);
@@ -150,3 +151,5 @@ public class Order {
 5. Decide on a native runtime/compiler implementation after stabilizing the core semantics.
 
 Java is a design influence only. Java source compatibility, Java interoperability, and JVM targeting are not requirements for kole.
+
+See [construction syntax](docs/construction.md) for declarations such as `names: List<string>();` and reassignment with `names = List<string>();`.

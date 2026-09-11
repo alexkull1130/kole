@@ -12,7 +12,7 @@ public class Point {
     }
 
     public static main() -> void {
-        point: Point = new Point(3, 4);
+        point: Point(3, 4);
         print(point.squaredDistance());
     }
 }

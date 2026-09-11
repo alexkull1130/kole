@@ -2361,5 +2361,39 @@
     "mode": "check",
     "source": "class Main {  static main() -> void { print(9223372036854775808L); } }",
     "success": false
+  },
+  {
+    "mode": "run",
+    "source": "class Main { names: List<string>(); static main() -> void { names: List<string>(); names.add(\"Alex\"); print(names); names = List<string>(); print(names.length); person: Main(); print(person.names.length); person = Main(); } }",
+    "entry": "Main",
+    "args": [],
+    "success": true,
+    "output": [
+      "[Alex]",
+      "0",
+      "0"
+    ]
+  },
+  {
+    "mode": "run",
+    "source": "class Box<A> { value: A; Box(value:A) { me.value=value; } } class Main { static main() -> void { box: Box<int>(3); box = Box<int>(4); print(box.value); nested: List<List<string>>(); nested.add(List<string>()); print(nested.length); } }",
+    "entry": "Main",
+    "args": [],
+    "success": true,
+    "output": [
+      "4",
+      "1"
+    ]
+  },
+  {
+    "mode": "run",
+    "source": "class Person { name:string; Person(name:string) { me.name=name; } } class Main { static main() -> void { person: Person(\"Alex\"); person = Person(\"Kull\"); print(person.name); print(1 < 2, 3 > 2, int(4)); } }",
+    "entry": "Main",
+    "args": [],
+    "success": true,
+    "output": [
+      "Kull",
+      "true true 4"
+    ]
   }
 ]

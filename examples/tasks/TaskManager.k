@@ -3,7 +3,7 @@ class TaskManager {
         path: string = "tasks.txt";
         if(args.length > 0) { path = args[0]; }
         try {
-            store: TaskStore = new TaskStore(path);
+            store: TaskStore(path);
             store.load();
             print("kole tasks | add <title>, list, done <number>, remove <number>, quit");
             while(true) {
@@ -30,7 +30,7 @@ class Task {
 }
 class TaskStore {
     private path: string;
-    private tasks: List<Task> = new List<Task>();
+    private tasks: List<Task>();
     TaskStore(path: string) { me.path = path; }
     load() -> void {
         if(!File.exists(path)) { return; }
@@ -38,15 +38,15 @@ class TaskStore {
             while(true) {
                 line: string? = file.readLine();
                 if(line == null) { break; }
-                if(line.length < 3) { throw new Error("Invalid task file"); }
+                if(line.length < 3) { throw Error("Invalid task file"); }
                 flag: string = line.substring(0, 2);
-                if(flag != "0\t" && flag != "1\t") { throw new Error("Invalid task record"); }
-                tasks.add(new Task(line.substring(2, line.length), flag == "1\t"));
+                if(flag != "0\t" && flag != "1\t") { throw Error("Invalid task record"); }
+                tasks.add(Task(line.substring(2, line.length), flag == "1\t"));
             }
         }
     }
     save() -> void {
-        lines: List<string> = new List<string>();
+        lines: List<string>();
         for(i=0:tasks.length:+) {
             prefix: string = "0\t";
             if(tasks[i].done) { prefix = "1\t"; }
@@ -55,14 +55,14 @@ class TaskStore {
         File.writeLines(path, lines.toArray());
     }
     add(title: string) -> void {
-        if(title.isEmpty() || title.contains("\t") || title.contains("\n") || title.contains("\r")) { throw new Error("Enter a nonempty, single-line title without tabs"); }
-        tasks.add(new Task(title, false));
+        if(title.isEmpty() || title.contains("\t") || title.contains("\n") || title.contains("\r")) { throw Error("Enter a nonempty, single-line title without tabs"); }
+        tasks.add(Task(title, false));
         try { save(); } catch(error: Error) { tasks.removeAt(tasks.length - 1); throw error; }
         print("Added.");
     }
     complete(number: int) -> void {
         index: int = number - 1;
-        if(index < 0 || index >= tasks.length) { throw new Error("Task number out of range"); }
+        if(index < 0 || index >= tasks.length) { throw Error("Task number out of range"); }
         previous: bool = tasks[index].done;
         tasks[index].done = true;
         try { save(); } catch(error: Error) { tasks[index].done = previous; throw error; }
@@ -70,7 +70,7 @@ class TaskStore {
     }
     remove(number: int) -> void {
         index: int = number - 1;
-        if(index < 0 || index >= tasks.length) { throw new Error("Task number out of range"); }
+        if(index < 0 || index >= tasks.length) { throw Error("Task number out of range"); }
         task: Task = tasks.removeAt(index);
         try { save(); } catch(error: Error) { tasks.insert(index, task); throw error; }
         print("Removed.");

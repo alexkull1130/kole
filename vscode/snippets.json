@@ -1,0 +1,68 @@
+{
+  "Main class": {
+    "prefix": "main",
+    "body": [
+      "class ${TM_FILENAME_BASE} {",
+      "    static main(args: string[]) -> void {",
+      "        $0",
+      "    }",
+      "}"
+    ]
+  },
+  "Range loop": {
+    "prefix": "for",
+    "body": [
+      "for(${1:i}=${2:0}:${3:10}:+) {",
+      "    $0",
+      "}"
+    ]
+  },
+  "Method": {
+    "prefix": "method",
+    "body": [
+      "${1:name}(${2}) -> ${3:void} {",
+      "    $0",
+      "}"
+    ]
+  },
+  "Scoped resource": {
+    "prefix": "using",
+    "body": [
+      "using(${1:file}: TextFile = File.open(${2:path}, \"${3:r}\")) {",
+      "    $0",
+      "}"
+    ]
+  },
+  "Try catch": {
+    "prefix": "try",
+    "body": [
+      "try {",
+      "    $1",
+      "} catch(error: Error) {",
+      "    print(error.message);",
+      "}"
+    ]
+  },
+  "Generic class": {
+    "prefix": "generic",
+    "body": [
+      "class ${1:Box}<A> {",
+      "    private item: A;",
+      "    ${1:Box}(item: A) { me.item = item; }",
+      "    get() -> A { return item; }",
+      "}"
+    ]
+  },
+  "Construct object": {
+    "prefix": "construct",
+    "body": [
+      "${1:name}: ${2:Type}(${3});"
+    ]
+  },
+  "Construct list": {
+    "prefix": "list",
+    "body": [
+      "${1:names}: List<${2:string}>();"
+    ]
+  }
+}

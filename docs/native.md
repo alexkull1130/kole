@@ -20,6 +20,6 @@ dotnet publish native/Kole.csproj -c Release -r win-x64 -p:PublishAot=true -o di
 .\dist\kole.exe run examples\tasks\TaskManager.k tasks.txt
 ```
 
-The Native Windows GitHub workflow builds and tests the native executable and uploads the `kole-windows-x64` artifact. Actions are pinned to verified commits. It runs the checked-in 398-case corpus of accepted/rejected programs and runtime outputs, plus native task persistence, console input, modules, and file cleanup tests. This corpus was captured from the bootstrap tests; new language features must update both implementations and extend conformance coverage.
+The Native Windows GitHub workflow builds and tests the native executable and uploads the `kole-windows-x64` artifact. Actions are pinned to verified commits. It runs the checked-in 401-case corpus of accepted/rejected programs and runtime outputs, plus native task persistence, console input, modules, and file cleanup tests. This corpus was captured from the bootstrap tests; new language features must update both implementations and extend conformance coverage.
 
 The JavaScript bootstrap remains available for development and regression testing. Its test suite uses Node, but the shipped native interpreter does not.
