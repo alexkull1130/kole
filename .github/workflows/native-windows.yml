@@ -1,0 +1,29 @@
+name: Native Windows
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['native/**', 'stdlib/**', 'scripts/verify-native.mjs', 'test/native-conformance.json', '.github/workflows/native-windows.yml']
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Build native executable
+        run: dotnet publish native/Kole.csproj -c Release -r win-x64 -p:PublishAot=true -p:StripSymbols=true -o dist
+      - name: Verify language conformance
+        run: node scripts/verify-native.mjs dist/kole.exe
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: kole-windows-x64
+          path: dist/kole.exe
+          if-no-files-found: error

@@ -1,2 +1,7 @@
 node_modules/
 .kole-build/
+native/bin/
+native/obj/
+dist/
+*.vsix
+tasks.txt
