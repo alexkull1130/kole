@@ -525,6 +525,19 @@ sealed class Checker(Runtime runtime)
                 scope.Facts = Common([.. yes.Contains("normal") ? new[] { yesScope } : [], .. no.Contains("normal") ? new[] { noScope } : []]);
                 yes.UnionWith(no);
                 return yes;
+            case "foreach":
+                string iterableType = Require(Expression((Node)node.Value!, scope), node);
+                if ((iterableType.StartsWith("Map<") || iterableType.StartsWith("Set<")) && !iterableType.EndsWith('?')) {
+                    node.Value = new Node("call", node.Token) { Callee = new Node("member", node.Token) { Object = (Node)node.Value!, Name = iterableType.StartsWith("Map<") ? "keys" : "toList" } };
+                    iterableType = Require(Expression((Node)node.Value, scope), node);
+                }
+                string? elementType = iterableType == "string" ? "char" : iterableType.EndsWith("[]") ? iterableType[..^2] : iterableType.StartsWith("List<") && iterableType.EndsWith('>') ? iterableType[5..^1] : null;
+                if (elementType is null) Runtime.Fail(node, "Collection loop requires a non-null array, List, Set, Map, or string");
+                node.Type = elementType!;
+                Kill(node.Body!, scope);
+                var eachScope = new TypeScope(scope); Declare(eachScope, node.Name, node.Type, node, true);
+                var eachPaths = Statement(node.Body!, eachScope, returnType);
+                return eachPaths.Contains("return") ? ["normal", "return"] : ["normal"];
             case "for":
                 Expect("int", Expression(node.Start!, scope), node.Start!);
                 Expect("int", Expression(node.End!, scope), node.End!);

@@ -436,6 +436,16 @@ export class Runtime {
         else if (node.no) this.statement(node.no, scope);
         break;
       }
+      case 'foreach': {
+        const source = this.eval(node.value, scope);
+        const items = typeof source === 'string' ? [...source].map(c => makeChar(c, node)) : [...source.items];
+        for (const item of items) {
+          this.tick(node);
+          const local = new Scope(scope); this.declare(local, node.name, node.type, item, node, true);
+          if (this.loopBody(node.body, local) === 'break') break;
+        }
+        break;
+      }
       case 'for': {
         const start = this.index(this.eval(node.start, scope), node);
         const end = this.index(this.eval(node.end, scope), node);

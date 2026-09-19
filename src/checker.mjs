@@ -358,6 +358,20 @@ class Checker {
         scope.facts = this.commonFacts([...(yes.has('normal') ? [yesScope] : []), ...(no.has('normal') ? [noScope] : [])]);
         return new Set([...yes, ...no]);
       }
+      case 'foreach': {
+        let type = this.requireValue(this.expression(node.value, scope), node.value);
+        if (/^(Map|Set)</.test(type) && !type.endsWith('?')) {
+          node.value = { kind: 'call', callee: { kind: 'member', object: node.value, name: type.startsWith('Map<') ? 'keys' : 'toList', token: node.token }, args: [], token: node.token };
+          type = this.requireValue(this.expression(node.value, scope), node.value);
+        }
+        const element = type === 'string' ? 'char' : type.endsWith('[]') ? type.slice(0,-2) : type.startsWith('List<') && type.endsWith('>') ? type.slice(5,-1) : null;
+        if (!element) this.fail(node, 'Collection loop requires a non-null array, List, Set, Map, or string');
+        node.type = element;
+        this.killLoopFacts(node.body, scope);
+        const local = new Scope(scope); this.declare(local, node.name, element, node, true);
+        const paths = this.statement(node.body, local, returnType);
+        return new Set(['normal', ...(paths.has('return') ? ['return'] : [])]);
+      }
       case 'for': {
         this.expect('int', this.expression(node.start, scope), node.start);
         this.expect('int', this.expression(node.end, scope), node.end);

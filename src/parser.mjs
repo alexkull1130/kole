@@ -189,7 +189,13 @@ class Parser {
     }
     if (this.at('{')) return this.block();
     if (this.match('for')) {
-      this.expect('('); const name = this.name(); this.expect('=');
+      this.expect('('); const name = this.name();
+      if (this.match(':')) {
+        const value = this.expression(); this.expect(')');
+        this.loops++; const body = this.block(); this.loops--;
+        return { kind: 'foreach', name, value, body, token };
+      }
+      this.expect('=');
       const start = this.expression(); this.expect(':');
       const end = this.expression(); this.expect(':');
       const step = this.match('+') ? 1 : this.match('-') ? -1 : null;

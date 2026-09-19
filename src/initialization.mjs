@@ -150,8 +150,9 @@ class Analysis {
         const paths = this.condition(node.condition, scope, state);
         return merge(this.statement(node.yes, new Scope(scope), paths.yes), node.no ? this.statement(node.no, new Scope(scope), paths.no) : paths.no === null ? new Map() : new Map([['normal', paths.no]]));
       }
+      case 'foreach':
       case 'for': {
-        state = this.expression(node.end, scope, this.expression(node.start, scope, state));
+        state = node.kind === 'foreach' ? this.expression(node.value, scope, state) : this.expression(node.end, scope, this.expression(node.start, scope, state));
         const local = new Scope(scope); local.locals.set(node.name, node);
         const initialized = new Set(state); initialized.add(node);
         const flow = this.statement(node.body, local, initialized);

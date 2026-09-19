@@ -575,6 +575,10 @@ sealed class Parser(List<Token> tokens)
         {
             Expect("(");
             var n = new Node("for", t) { Name = Name() };
+            if (Match(":")) {
+                n.Kind = "foreach"; n.Value = Expression(); Expect(")");
+                loops++; n.Body = Block(); loops--; return n;
+            }
             Expect("=");
             n.Start = Expression();
             Expect(":");

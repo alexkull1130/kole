@@ -172,8 +172,9 @@ sealed class Initialization(Class cls)
             case "if":
                 var paths = Condition(node.Condition!, scope, state);
                 return Merge(Statement(node.Yes!, new(scope), paths.Yes), node.No is not null ? Statement(node.No, new(scope), paths.No) : paths.No is null ? [] : new() { { "normal", paths.No } });
+            case "foreach":
             case "for":
-                state = Expression(node.End!, scope, Expression(node.Start!, scope, state));
+                state = node.Kind == "foreach" ? Expression((Node)node.Value!, scope, state) : Expression(node.End!, scope, Expression(node.Start!, scope, state));
                 var forScope = new InitScope(scope);
                 forScope.Locals[node.Name] = node;
                 var initialized = new HashSet<Node>(state) { node };

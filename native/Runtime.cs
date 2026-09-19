@@ -661,6 +661,15 @@ sealed class Runtime
                 else if (node.No is not null)
                     Statement(node.No, scope);
                 break;
+            case "foreach":
+                var source = Eval((Node)node.Value!, scope);
+                var snapshot = source is string text ? text.EnumerateRunes().Select(c => (object?)Numbers.Character(c.ToString(), node.Token)).ToList() : new List<object?>(((Collection)source!).Items);
+                foreach (var item in snapshot) {
+                    Tick(node);
+                    var eachScope = new Scope(scope); Declare(eachScope, node.Name, node.Type, item, node, true);
+                    if (Loop(node.Body!, eachScope) == "break") break;
+                }
+                break;
             case "for":
                 int start = Index(Eval(node.Start!, scope), node), end = Index(Eval(node.End!, scope), node);
                 var loopScope = new Scope(scope);
