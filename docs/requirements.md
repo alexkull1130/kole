@@ -62,7 +62,7 @@ public class Connection {
 | Ownership and object relationships | Implemented for single concrete objects: one owning slot, optional managed back-reference, duplicate/cycle checks, detach/transfer |
 | Contracts | `require` preconditions implemented; postconditions and invariants planned |
 | Non-null types by default and `Type?` | Implemented, with local/parameter narrowing; fields require local snapshots |
-| Immutable values by default | Planned; distinguish immutable bindings from immutable objects |
+| Immutable values by default | Const local bindings and initialized instance fields implemented; immutability by default remains planned |
 | Data classes | Planned constructors, equality, and readable printing |
 | Properties with controlled access | Planned |
 | Sealed types and exhaustive pattern matching | Planned |
@@ -104,6 +104,7 @@ It is implemented and intentionally omitted from ordinary CLI usage text. It req
 9. **Done:** packages/imports and user-defined generic classes/interfaces.
 10. **Done:** exceptions, console/files/math, scoped cleanup, and a persistent task manager.
 11. **Done:** standalone Windows executable, VS Code support, and concise construction syntax.
-12. Expand contracts, value features, optional memory control, and concurrency after their interaction rules are specified.
+12. **Done:** Map/Set, collection loops, switch expressions, const bindings, and improved diagnostics.
+13. Expand contracts, value features, optional memory control, and concurrency after their interaction rules are specified.
 
 The precise rules are in [objects and safety](objects-and-safety.md) and [values and collections](values-and-collections.md). Lifecycle correctness, ownership conflicts/cycles, initialization through arbitrary aliases/callbacks, overflow, and index safety retain runtime checks. Static checks do not execute user code and report the first error with a .k source location.

@@ -61,7 +61,7 @@ sealed class Checker(Runtime runtime)
         r.Access(field, cls, scope.Owner, node);
         return new(Type(field.Type, field.Owner ?? cls, field))
         {
-            Writable = !field.Lifecycle && field.Relationship != "belongsTo"
+            Writable = !field.Const && !field.Lifecycle && field.Relationship != "belongsTo"
         };
     }
     Info Member(Info obj, string name, TypeScope scope, Node node)
@@ -172,7 +172,7 @@ sealed class Checker(Runtime runtime)
     {
         var target = Expression(node, scope);
         if (!target.Writable)
-            Runtime.Fail(node, "Cannot assign to a loop counter, lifecycle field, belongsTo reference, or non-writable expression");
+            Runtime.Fail(node, "Cannot assign to a const binding, loop counter, lifecycle field, belongsTo reference, or non-writable expression");
         target.ReadType = target.Type;
         if (target.DeclaredType != "")
             target.Type = target.DeclaredType;
@@ -283,6 +283,51 @@ sealed class Checker(Runtime runtime)
                 if (!Numbers.Is(update.ReadType))
                     Runtime.Fail(node, "Increment/decrement requires a number");
                 return Value(update.ReadType);
+            case "switch":
+                var selector = Expression((Node)node.Value!, scope);
+                Require(selector, node);
+                var labels = new HashSet<string>();
+                var switchScopes = new List<TypeScope>();
+                var results = new List<Info>();
+                foreach (var arm in node.Items)
+                {
+                    if (arm.Left is { } labelNode)
+                    {
+                        var label = Expression(labelNode, scope);
+                        bool enumeration = labelNode.Kind == "member" && Expression(labelNode.Object!, scope).Kind == "enum";
+                        if (labelNode.Kind != "literal" && !enumeration)
+                            Runtime.Fail(labelNode, "Switch cases require literals or enum values");
+                        Binary("==", selector, label, labelNode);
+                        string key = enumeration ? label.Type + ":" + labelNode.Name : (Numbers.Is(label.Type) ? "number" : label.Type) + ":" + r.Format(labelNode.Value);
+                        if (!labels.Add(key))
+                            Runtime.Fail(labelNode, "Duplicate switch case");
+                    }
+                    var armScope = new TypeScope(scope);
+                    var armResult = Expression(arm.Right!, armScope, expected);
+                    Require(armResult, arm.Right!);
+                    switchScopes.Add(armScope);
+                    results.Add(armResult);
+                }
+                string switchType = expected ?? results[0].Type;
+                if (expected is null)
+                foreach (var armResult in results.Skip(1))
+                {
+                    if (Assignable(switchType, armResult.Type))
+                        continue;
+                    if (Assignable(armResult.Type, switchType))
+                        switchType = armResult.Type;
+                    else if (switchType == "null")
+                        switchType = armResult.Type.EndsWith('?') ? armResult.Type : armResult.Type + "?";
+                    else if (armResult.Type == "null")
+                        switchType = switchType.EndsWith('?') ? switchType : switchType + "?";
+                    else
+                        Runtime.Fail(node, "Switch arms need a common type; declare a armResult type");
+                }
+                for (int i = 0; i < results.Count; i++)
+                    Expect(switchType, results[i], node.Items[i].Right!);
+                node.Type = switchType;
+                scope.Facts = Common(switchScopes);
+                return Value(switchType);
             case "new":
                 if (!r.Classes.TryGetValue(node.Name, out var cls))
                     throw new Fault($"Unknown class '{node.Name}'", node.Token);
@@ -339,7 +384,8 @@ sealed class Checker(Runtime runtime)
                 return Value(arrayElement + "[]");
             case "call":
                 var callee = Expression(node.Callee!, scope);
-                if (callee.Kind == "class") return Expression(new Node("new", node.Token) { Name = callee.Class!.Name, Args = node.Args }, scope);
+                if (callee.Kind == "class")
+                    return Expression(new Node("new", node.Token) { Name = callee.Class!.Name, Args = node.Args }, scope);
                 if (callee.Kind == "print")
                 {
                     foreach (var arg in node.Args)
@@ -390,8 +436,8 @@ sealed class Checker(Runtime runtime)
     static void Kill(Node node, TypeScope scope)
     {
         foreach (var name in Assigned(node))
-        if (scope.Find(name) is { } b)
-            scope.Facts.Remove(b);
+            if (scope.Find(name) is { } b)
+                scope.Facts.Remove(b);
     }
     static void Refine(Node condition, bool truth, TypeScope scope, HashSet<string>? assigned = null)
     {
@@ -435,7 +481,7 @@ sealed class Checker(Runtime runtime)
                 Info? initial = node.Value is Node value ? Expression(value, scope, type) : null;
                 if (initial is not null)
                     Expect(type, initial, (Node)node.Value!);
-                var binding = Declare(scope, node.Name, type, node);
+                var binding = Declare(scope, node.Name, type, node, node.Const);
                 if (type.EndsWith('?') && initial is not null && initial.Type != "null" && !initial.Type.EndsWith('?'))
                     scope.Facts[binding] = type[..^1];
                 break;
@@ -527,15 +573,18 @@ sealed class Checker(Runtime runtime)
                 return yes;
             case "foreach":
                 string iterableType = Require(Expression((Node)node.Value!, scope), node);
-                if ((iterableType.StartsWith("Map<") || iterableType.StartsWith("Set<")) && !iterableType.EndsWith('?')) {
+                if ((iterableType.StartsWith("Map<") || iterableType.StartsWith("Set<")) && !iterableType.EndsWith('?'))
+                {
                     node.Value = new Node("call", node.Token) { Callee = new Node("member", node.Token) { Object = (Node)node.Value!, Name = iterableType.StartsWith("Map<") ? "keys" : "toList" } };
                     iterableType = Require(Expression((Node)node.Value, scope), node);
                 }
                 string? elementType = iterableType == "string" ? "char" : iterableType.EndsWith("[]") ? iterableType[..^2] : iterableType.StartsWith("List<") && iterableType.EndsWith('>') ? iterableType[5..^1] : null;
-                if (elementType is null) Runtime.Fail(node, "Collection loop requires a non-null array, List, Set, Map, or string");
+                if (elementType is null)
+                    Runtime.Fail(node, "Collection loop requires a non-null array, List, Set, Map, or string");
                 node.Type = elementType!;
                 Kill(node.Body!, scope);
-                var eachScope = new TypeScope(scope); Declare(eachScope, node.Name, node.Type, node, true);
+                var eachScope = new TypeScope(scope);
+                Declare(eachScope, node.Name, node.Type, node, true);
                 var eachPaths = Statement(node.Body!, eachScope, returnType);
                 return eachPaths.Contains("return") ? ["normal", "return"] : ["normal"];
             case "for":
@@ -579,11 +628,11 @@ sealed class Checker(Runtime runtime)
             }
             var fieldScope = new TypeScope(null, cls, true);
             foreach (var field in cls.OwnFields.Values)
-            if (field.Init is not null)
-            {
-                string type = Type(field.Type, cls, field);
-                Expect(type, Expression(field.Init, fieldScope, type), field.Init);
-            }
+                if (field.Init is not null)
+                {
+                    string type = Type(field.Type, cls, field);
+                    Expect(type, Expression(field.Init, fieldScope, type), field.Init);
+                }
             foreach (var method in cls.OwnMethods.Values)
             {
                 if (method.Body is null)
@@ -617,7 +666,7 @@ sealed class Checker(Runtime runtime)
             }
         }
         foreach (var cls in r.Classes.Values)
-        if (!cls.IsInterface)
-            new Initialization(cls).Check();
+            if (!cls.IsInterface)
+                new Initialization(cls).Check();
     }
 }

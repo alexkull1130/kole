@@ -286,7 +286,7 @@ export class Runtime {
       binding = { type: collection.elementType, owner: collection.owner, value: collection.items[index], collection, index };
     }
     if (!binding) this.fail(node, 'Unknown assignment target');
-    if (binding.readonly) this.fail(node, 'Cannot assign to a loop counter, lifecycle field, or belongsTo reference directly');
+    if (binding.readonly) this.fail(node, 'Cannot assign to a const binding, loop counter, lifecycle field, or belongsTo reference directly');
     return binding;
   }
   detach(binding) {
@@ -366,6 +366,12 @@ export class Runtime {
         const updated = this.binary('+', previous, number('int', node.step, node), node);
         this.write(binding, convertNumber(binding.type.replace(/\?$/, ''), updated, node), node); return previous;
       }
+      case 'switch': {
+        const selector = this.eval(node.value, scope);
+        const arm = node.arms.find(arm => !arm.label || this.binary('==', selector, this.eval(arm.label, scope), node));
+        const result = this.eval(arm.result, scope);
+        return node.type === 'null' ? result : this.checkType(node.type, result, scope.owner, node);
+      }
       case 'new': return this.create(node.name, node.args.map(arg => this.eval(arg, scope)), scope, node);
       case 'array': {
         const items = node.items.map(item => this.eval(item, scope));
@@ -426,7 +432,7 @@ export class Runtime {
         break;
       }
       case 'superCall': this.fail(node, 'super(...) must be the first constructor statement'); break;
-      case 'declare': this.declare(scope, node.name, node.type, node.value ? this.eval(node.value, scope) : UNSET, node); break;
+      case 'declare': this.declare(scope, node.name, node.type, node.value ? this.eval(node.value, scope) : UNSET, node, node.isConst); break;
       case 'expression': this.eval(node.expression, scope); break;
       case 'return': throw new Flow('return', node.value ? this.eval(node.value, scope) : undefined);
       case 'break': case 'continue': throw new Flow(node.kind);
@@ -502,7 +508,11 @@ export class Runtime {
       if (parentConstructor) this.access(parentConstructor, cls.parent, scope, node);
       this.initialize(cls.parent, object, first?.kind === 'superCall' ? first.args.map(arg=>this.eval(arg,scope)) : [], node);
     }
-    for (const field of cls.ownFields.values()) if (field.init) this.write(object.fields.get(field.name), this.eval(field.init, scope), field);
+    for (const field of cls.ownFields.values()) if (field.init) {
+      const binding = object.fields.get(field.name);
+      this.write(binding, this.eval(field.init, scope), field);
+      if (field.isConst) binding.readonly = true;
+    }
     if (constructor) {
       try { this.statement({ ...constructor.body, statements: constructor.body.statements.slice(first?.kind === 'superCall' ? 1 : 0) }, scope); }
       catch (flow) { if (!(flow instanceof Flow) || flow.kind !== 'return') throw flow; if (flow.value !== undefined) this.fail(node,'A constructor cannot return a value'); }

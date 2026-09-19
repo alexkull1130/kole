@@ -2,17 +2,50 @@
   "name": "kole-language",
   "displayName": "Kole",
   "description": "Language support for .k files: highlighting, diagnostics, completion, and navigation.",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "publisher": "alexkull1130",
   "license": "UNLICENSED",
-  "engines": { "vscode": "^1.90.0" },
-  "categories": ["Programming Languages"],
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
   "main": "./extension.cjs",
-  "activationEvents": ["onLanguage:kole"],
-  "capabilities": { "untrustedWorkspaces": { "supported": true } },
+  "activationEvents": [
+    "onLanguage:kole"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true
+    }
+  },
   "contributes": {
-    "languages": [{ "id": "kole", "aliases": ["Kole", "kole"], "extensions": [".k"], "configuration": "./language-configuration.json" }],
-    "grammars": [{ "language": "kole", "scopeName": "source.kole", "path": "./kole.tmLanguage.json" }],
-    "snippets": [{ "language": "kole", "path": "./snippets.json" }]
+    "languages": [
+      {
+        "id": "kole",
+        "aliases": [
+          "Kole",
+          "kole"
+        ],
+        "extensions": [
+          ".k"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "kole",
+        "scopeName": "source.kole",
+        "path": "./kole.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "kole",
+        "path": "./snippets.json"
+      }
+    ]
   }
 }

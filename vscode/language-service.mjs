@@ -1,3 +1,4 @@
+import { diagnosticHint } from './language/src/diagnostics.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { parse } from './language/src/parser.mjs';
@@ -9,7 +10,7 @@ import { builtinSignature } from './language/src/builtins.mjs';
 import { mapType, genericParts } from './language/src/generics.mjs';
 
 const memberNames = ['length','isEmpty','contains','startsWith','endsWith','indexOf','lastIndexOf','charAt','substring','toUpperCase','toLowerCase','trim','replace','split','repeat','toCharArray','get','set','first','last','reverse','copy','slice','join','toArray','toList','add','addAll','insert','remove','removeAt','clear'];
-export const keywords = ['class','interface','extends','implements','abstract','override','public','private','static','me','super','new','return','if','else','for','while','break','continue','try','catch','finally','throw','using','require','requires','transitions','state','enum','owns','belongsTo','package','import','byte','short','int','long','float','char','bool','string','void','List','true','false','null','print'];
+export const keywords = ['const','switch','case','default','Map','Set','class','interface','extends','implements','abstract','override','public','private','static','me','super','new','return','if','else','for','while','break','continue','try','catch','finally','throw','using','require','requires','transitions','state','enum','owns','belongsTo','package','import','byte','short','int','long','float','char','bool','string','void','List','true','false','null','print'];
 const key = file => path.resolve(file).toLowerCase();
 export function analyze(file, source, overlays = new Map()) {
   const open = new Map([...overlays].map(([file,text]) => [key(file),text])); open.set(key(file),source);
@@ -20,7 +21,7 @@ export function analyze(file, source, overlays = new Map()) {
     });
     check(program,new Runtime(program)); return [];
   } catch(error) {
-    return [{ file:error.file??file, line:Math.max(0,(error.line??1)-1), column:Math.max(0,(error.column??1)-1), message:error.message }];
+    return [{ file:error.file??file, line:Math.max(0,(error.line??1)-1), column:Math.max(0,(error.column??1)-1), message:error.message + (diagnosticHint(error.message) ? "\nHint: " + diagnosticHint(error.message) : "") }];
   }
 }
 
@@ -56,6 +57,15 @@ export function indexDocument(source,file) {
         if(!node||typeof node!=='object')return;
         if(node.kind==='block'){scopeStart=offset(node.token);scopeEnd=end(node.token);depth++;}
         if(node.kind==='declare')add(node,'variable',owner,scopeStart,scopeEnd,depth);
+        if(node.kind==='foreach') {
+          const expression=node.value;
+          let type=expression.kind==='name'?symbols.filter(s=>s.name===expression.name&&s.owner===owner&&offset(node.token)>=s.start&&offset(node.token)<=s.end).sort((a,b)=>b.depth-a.depth||b.offset-a.offset)[0]?.type:'';
+          if(expression.kind==='literal'&&typeof expression.value==='string')type='string';
+          if(expression.kind==='newList'||expression.kind==='new')type=expression.name;
+          const generic=genericParts(type??'');
+          const element=type==='string'?'char':type?.endsWith('[]')?type.slice(0,-2):generic&&['List','Set','Map'].includes(generic.base)?generic.args[0]:'';
+          add({...node,type:element},'variable',owner,offset(node.body.token),end(node.body.token),depth+1);
+        }
         if(node.kind==='for'||node.kind==='using')add({...node,type:node.kind==='for'?'int':node.type},'variable',owner,offset(node.body.token),end(node.body.token),depth+1);
         if(node.kind==='try')for(const handler of node.catches)add(handler,'parameter',owner,offset(handler.body.token),end(handler.body.token),depth+1);
         for(const [k,child] of Object.entries(node))if(k!=='token'){

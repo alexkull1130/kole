@@ -73,6 +73,8 @@ CLI language errors use `file.k:line:column: message` and exit with status 1. Us
 
 ## Not implemented
 
-Ownership collections and explicit inverse selection, atomic blocks, general variable type inference, interprocedural initialization analysis, static lifecycle analysis, immutable-by-default values, data classes, properties, sealed types/pattern matching, generic methods and bounds, interface default methods/inheritance, maps/sets/iterators, custom loop steps, concurrency, arenas/manual allocation, and machine-code compilation of individual Kole programs. Array-literal element inference, expressive string/container methods, built-in List<A>, and user-defined generic classes/interfaces are implemented; see [generics](generics.md).
+Ownership collections and explicit inverse selection, atomic blocks, general variable type inference, interprocedural initialization analysis, static lifecycle analysis, immutable-by-default values, data classes, properties, sealed types/pattern matching, generic methods and bounds, interface default methods/inheritance, user-defined iterator protocols, custom loop steps, concurrency, arenas/manual allocation, and machine-code compilation of individual Kole programs. Array-literal element inference, expressive string/container methods, built-in List<A>, and user-defined generic classes/interfaces are implemented; see [generics](generics.md).
 
 Exceptions, file/console/math APIs, and deterministic resource cleanup are specified in [errors and library](errors-and-library.md). [Construction syntax](construction.md) covers the concise constructor forms.
+
+Map/Set, snapshot collection loops, switch expressions, and const bindings are specified in [Kole 0.11 additions](language-011.md).

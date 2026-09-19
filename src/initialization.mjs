@@ -78,6 +78,11 @@ class Analysis {
         state = this.expression(node.callee, scope, state);
         for (const arg of node.args) state = this.expression(arg, scope, state);
         break;
+      case 'switch': {
+        const ready = this.expression(node.value, scope, state);
+        state = node.arms.map(arm => this.expression(arm.result, scope, new Set(ready))).reduce(intersect);
+        break;
+      }
       case 'new': for (const arg of node.args) state = this.expression(arg, scope, state); break;
       case 'array': for (const item of node.items) state = this.expression(item, scope, state); break;
       case 'newArray': state = this.expression(node.size, scope, state); break;

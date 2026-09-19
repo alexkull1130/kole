@@ -1,7 +1,7 @@
 import { KoleError, tokenize } from './lexer.mjs';
 import { literalNumber, makeChar } from './numbers.mjs';
 
-const reserved = new Set(['try', 'catch', 'finally', 'throw', 'using', 'package', 'import', 'extends', 'override', 'abstract', 'super', 'class', 'interface', 'implements', 'public', 'private', 'static', 'enum', 'state', 'requires', 'transitions', 'require', 'if', 'else', 'while', 'for', 'return', 'break', 'continue', 'new', 'me', 'this', 'true', 'false', 'null', 'owns', 'belongsTo', 'atomic']);
+const reserved = new Set(['const', 'switch', 'case', 'default', 'try', 'catch', 'finally', 'throw', 'using', 'package', 'import', 'extends', 'override', 'abstract', 'super', 'class', 'interface', 'implements', 'public', 'private', 'static', 'enum', 'state', 'requires', 'transitions', 'require', 'if', 'else', 'while', 'for', 'return', 'break', 'continue', 'new', 'me', 'this', 'true', 'false', 'null', 'owns', 'belongsTo', 'atomic']);
 const precedence = { '=': 1, '+=': 1, '-=': 1, '||': 2, '&&': 3, '==': 4, '!=': 4, '<': 5, '>': 5, '<=': 5, '>=': 5, '+': 6, '-': 6, '*': 7, '/': 7, '%': 7 };
 
 export function parse(source, file) {
@@ -45,15 +45,15 @@ class Parser {
     return type;
   }
   modifiers() {
-    let access = 'public', isStatic = false, isAbstract = false, isOverride = false;
+    let access = 'public', isStatic = false, isAbstract = false, isOverride = false, isConst = false;
     const seen = new Set();
-    while (['public', 'private', 'static', 'abstract', 'override'].some(v => this.at(v))) {
+    while (['public', 'private', 'static', 'abstract', 'override', 'const'].some(v => this.at(v))) {
       const t = this.take();
       if (seen.has(t.text) || (['public', 'private'].includes(t.text) && (seen.has('public') || seen.has('private')))) throw new KoleError('Duplicate or conflicting modifier', t);
       seen.add(t.text);
-      if (t.text === 'static') isStatic = true; else if (t.text === 'abstract') isAbstract = true; else if (t.text === 'override') isOverride = true; else access = t.text;
+      if (t.text === 'static') isStatic = true; else if (t.text === 'abstract') isAbstract = true; else if (t.text === 'override') isOverride = true; else if (t.text === 'const') isConst = true; else access = t.text;
     }
-    return { access, isStatic, isAbstract, isOverride };
+    return { access, isStatic, isAbstract, isOverride, isConst };
   }
   qualifiedName() {
     let name = this.name(); while (this.match('.')) name += '.' + this.name(); return name;
@@ -94,6 +94,7 @@ class Parser {
     while (!this.at('}')) {
       const token = this.peek(), modifiers = this.modifiers();
       if (this.match('enum')) {
+        if (modifiers.isConst) throw new KoleError('const applies to fields and local bindings only', token);
         if (modifiers.isAbstract || modifiers.isOverride) throw new KoleError('abstract and override apply to methods only', token);
         if (isInterface) throw new KoleError('Interfaces contain method signatures only', token);
         const name = this.name(), values = [];
@@ -117,6 +118,7 @@ class Parser {
         type = this.type(); memberName = this.name();
       }
       if (!(modern && type && !constructor) && this.match('(')) {
+        if (modifiers.isConst) throw new KoleError('const applies to fields and local bindings only', token);
         if (modern && type && !constructor) throw new KoleError('Methods use name(parameters) -> Type, not name: Type(parameters)', token);
         if (lifecycle || relationship) throw new KoleError('state, owns, and belongsTo apply to fields only', token);
         const params = [];
@@ -150,6 +152,7 @@ class Parser {
         if (modifiers.isAbstract || modifiers.isOverride) throw new KoleError('abstract and override apply to methods only', token);
         if (modifiers.isStatic) throw new KoleError('Static fields are not implemented yet', token);
         const init = this.at('(') ? this.construct(type, token) : this.match('=') ? this.expression() : null;
+        if (modifiers.isConst && (!init || lifecycle || relationship)) throw new KoleError('const fields require an initializer and cannot be state or relationship fields', token);
         if (this.at('->')) throw new KoleError('Methods use name(parameters) -> Type', token);
         this.expect(';');
         members.push({ kind: 'field', name: memberName, type, init, lifecycle, relationship, token, ...modifiers });
@@ -168,6 +171,11 @@ class Parser {
   }
   statement() {
     const token = this.peek();
+    if (this.match('const')) {
+      const declaration = this.statement();
+      if (declaration.kind !== 'declare' || !declaration.value || declaration.isConst) throw new KoleError('const requires a declaration with an initializer', token);
+      declaration.isConst = true; return declaration;
+    }
     if (this.match('throw')) { const value = this.expression(); this.expect(';'); return { kind: 'throw', value, token }; }
     if (this.match('try')) {
       const body = this.block(), catches = [];
@@ -294,6 +302,19 @@ class Parser {
     if (this.match('true')) return { kind: 'literal', value: true, token };
     if (this.match('false')) return { kind: 'literal', value: false, token };
     if (this.match('null')) return { kind: 'literal', value: null, token };
+    if (this.match('switch')) {
+      this.expect('('); const value = this.expression(); this.expect(')'); this.expect('{');
+      const arms = []; let fallback = false;
+      while (!this.at('}')) {
+        const token = this.peek(); let label = null;
+        if (this.match('case')) { if (fallback) throw new KoleError('default must be the last switch arm', token); label = this.expression(); }
+        else { this.expect('default'); if (fallback) throw new KoleError('Duplicate default arm', token); fallback = true; }
+        this.expect('->'); const result = this.expression(); this.expect(';');
+        arms.push({ label, result, token });
+      }
+      this.expect('}'); if (!fallback) throw new KoleError('Switch expression requires a default arm', token);
+      return { kind: 'switch', value, arms, token };
+    }
     if (this.match('new')) {
       const name = this.type();
       if (this.match('[')) { const size = this.expression(); this.expect(']'); return { kind: 'newArray', elementType: name, size, token }; }

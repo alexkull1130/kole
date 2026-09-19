@@ -64,5 +64,40 @@
     "body": [
       "${1:names}: List<${2:string}>();"
     ]
+  },
+  "Collection loop": {
+    "prefix": "foreach",
+    "body": [
+      "for(${1:item}: ${2:items}) {",
+      "    $0",
+      "}"
+    ]
+  },
+  "Switch expression": {
+    "prefix": "switch",
+    "body": [
+      "switch(${1:value}) {",
+      "    case ${2:1} -> ${3:result};",
+      "    default -> ${4:fallback};",
+      "}"
+    ]
+  },
+  "Const binding": {
+    "prefix": "const",
+    "body": [
+      "const ${1:name}: ${2:int} = ${3:0};"
+    ]
+  },
+  "Construct map": {
+    "prefix": "map",
+    "body": [
+      "${1:values}: Map<${2:string},${3:int}>();"
+    ]
+  },
+  "Construct set": {
+    "prefix": "set",
+    "body": [
+      "${1:values}: Set<${2:string}>();"
+    ]
   }
 }

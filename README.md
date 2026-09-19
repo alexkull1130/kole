@@ -6,7 +6,7 @@ kole is a Java-inspired, object-oriented programming language. Its working direc
 
 The agreed syntax, full feature roadmap, optional memory management, and Alex Kull Easter egg are recorded in [requirements](docs/requirements.md).
 
-Version 0.10 adds a standalone Windows executable, VS Code language support, and concise construction syntax. It includes exceptions, scoped cleanup, console/file/math APIs, and a file-backed task manager (see [errors and library](docs/errors-and-library.md)). It also includes expressive string/collection methods, class inheritance, required overrides, abstract classes, parent access, packages/imports, and user-defined generic classes/interfaces. Type names are `byte`, `short`, `int`, `long`, `float`, `char`, `bool`, and `string`; `double` is not supported. See [values and collections](docs/values-and-collections.md). The existing OOP rules are in [objects and safety](docs/objects-and-safety.md). The current-object keyword is **`me`**.
+Version 0.11 adds Map and Set collections, collection loops, switch expressions, const bindings, and source-line diagnostics ([language additions](docs/language-011.md)). Version 0.10 introduced a standalone Windows executable, VS Code language support, and concise construction syntax. It includes exceptions, scoped cleanup, console/file/math APIs, and a file-backed task manager (see [errors and library](docs/errors-and-library.md)). It also includes expressive string/collection methods, class inheritance, required overrides, abstract classes, parent access, packages/imports, and user-defined generic classes/interfaces. Type names are `byte`, `short`, `int`, `long`, `float`, `char`, `bool`, and `string`; `double` is not supported. See [values and collections](docs/values-and-collections.md). The existing OOP rules are in [objects and safety](docs/objects-and-safety.md). The current-object keyword is **`me`**.
 
 This folder contains the first working kole interpreter. kole has its own lexer, parser, object model, and execution engine. It does not depend on Java, the JVM, or Java libraries, and does not translate programs into Java or JavaScript.
 
@@ -18,6 +18,7 @@ Download `kole.exe` from the private repository release (or Native Windows build
 
 ```powershell
 .\kole.cmd run examples\Hello.k
+.\kole.cmd run examples\LanguageTour.k
 .\kole.cmd run examples\adventure\Adventure.k
 .\kole.cmd run examples\tasks\TaskManager.k tasks.txt
 .\kole.cmd run examples\Point.k

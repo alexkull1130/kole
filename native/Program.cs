@@ -17,7 +17,7 @@ static class Program
         }
         if (args is ["--version"])
         {
-            Console.WriteLine("kole 0.10.0 (native C# interpreter)");
+            Console.WriteLine("kole 0.11.0 (native C# interpreter)");
             return 0;
         }
         if (args.Length < 2 || args[0] is not ("run" or "check"))
@@ -36,7 +36,7 @@ static class Program
                 Console.WriteLine($"{args[1]}: static checks passed");
             return 0;
         }
-        catch (Fault error) { Console.Error.WriteLine($"{(error.At.File == "" ? args[1] : error.At.File)}:{error.At.Line}:{error.At.Column}: {(error is Thrown t ? t.Value.Class.Name + ": " : "")}{error.Message}"); foreach (var frame in error.Frames) Console.Error.WriteLine("  at " + frame); foreach (var suppressed in error.Suppressed) Console.Error.WriteLine("  suppressed: " + suppressed.Message); return 1; }
+        catch (Fault error) { Console.Error.WriteLine($"{(error.At.File == "" ? args[1] : error.At.File)}:{error.At.Line}:{error.At.Column}: {(error is Thrown t ? t.Value.Class.Name + ": " : "")}{error.Message}"); Diagnostics.Print(error, args[1]); foreach (var frame in error.Frames) Console.Error.WriteLine("  at " + frame); foreach (var suppressed in error.Suppressed) Console.Error.WriteLine("  suppressed: " + suppressed.Message); return 1; }
         catch (Exception error) { Console.Error.WriteLine("kole: internal error: " + error.Message); return 1; }
     }
 }

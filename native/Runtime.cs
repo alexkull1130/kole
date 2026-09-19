@@ -62,14 +62,14 @@ sealed class Runtime
             if (cls.Lifecycle is { } life && !cls.Enums.ContainsKey(life.Type))
                 Fail(life, "Lifecycle type must be an enum declared in this class");
             foreach (var method in cls.Methods.Values)
-            if (method.From != "")
-            {
-                if (cls.Lifecycle is null)
-                    Fail(method, "Lifecycle method requires a state field");
-                var values = cls.Enums[cls.Lifecycle!.Type].Values;
-                if (!values.ContainsKey(method.From) || method.To != "" && !values.ContainsKey(method.To))
-                    Fail(method, "Unknown lifecycle state");
-            }
+                if (method.From != "")
+                {
+                    if (cls.Lifecycle is null)
+                        Fail(method, "Lifecycle method requires a state field");
+                    var values = cls.Enums[cls.Lifecycle!.Type].Values;
+                    if (!values.ContainsKey(method.From) || method.To != "" && !values.ContainsKey(method.To))
+                        Fail(method, "Unknown lifecycle state");
+                }
             foreach (var arg in cls.Declaration.TypeArguments)
                 ValidateType(arg, null, cls.Declaration);
             foreach (var field in cls.Fields.Values)
@@ -103,28 +103,28 @@ sealed class Runtime
             }
         }
         foreach (var cls in Classes.Values)
-        foreach (var field in cls.OwnFields.Values)
-        {
-            if (field.Relationship == "")
-                continue;
-            var related = Classes.GetValueOrDefault(field.Type.TrimEnd('?'));
-            if (related is null || related.IsInterface)
-                Fail(field, "Relationships require a concrete class type, optionally nullable");
-            if (field.Relationship == "belongsTo")
+            foreach (var field in cls.OwnFields.Values)
             {
-                if (!field.Type.EndsWith('?') || field.Init is not null)
-                    Fail(field, "belongsTo must be nullable with no initializer");
-                if (!related!.Fields.Values.Any(f => f.Relationship == "owns" && f.Type.TrimEnd('?') == cls.Name))
-                    Fail(field, "belongsTo needs a matching owns field in the owner class");
+                if (field.Relationship == "")
+                    continue;
+                var related = Classes.GetValueOrDefault(field.Type.TrimEnd('?'));
+                if (related is null || related.IsInterface)
+                    Fail(field, "Relationships require a concrete class type, optionally nullable");
+                if (field.Relationship == "belongsTo")
+                {
+                    if (!field.Type.EndsWith('?') || field.Init is not null)
+                        Fail(field, "belongsTo must be nullable with no initializer");
+                    if (!related!.Fields.Values.Any(f => f.Relationship == "owns" && f.Type.TrimEnd('?') == cls.Name))
+                        Fail(field, "belongsTo needs a matching owns field in the owner class");
+                }
+                else
+                {
+                    var inverse = related!.Fields.Values.Where(f => f.Relationship == "belongsTo" && f.Type.TrimEnd('?') == cls.Name).ToList();
+                    if (inverse.Count > 1)
+                        Fail(field, "Ambiguous belongsTo relationship");
+                    field.Inverse = inverse.FirstOrDefault()?.Name;
+                }
             }
-            else
-            {
-                var inverse = related!.Fields.Values.Where(f => f.Relationship == "belongsTo" && f.Type.TrimEnd('?') == cls.Name).ToList();
-                if (inverse.Count > 1)
-                    Fail(field, "Ambiguous belongsTo relationship");
-                field.Inverse = inverse.FirstOrDefault()?.Name;
-            }
-        }
     }
     void Link()
     {
@@ -145,8 +145,8 @@ sealed class Runtime
                 Visit(parent!);
                 cls.Parent = parent;
                 foreach (var (name, f) in parent!.Fields)
-                if (cls.Fields.ContainsKey(name) || cls.Methods.ContainsKey(name) || cls.Enums.ContainsKey(name))
-                    Fail(cls.Declaration, $"Inherited field '{name}' cannot be shadowed");
+                    if (cls.Fields.ContainsKey(name) || cls.Methods.ContainsKey(name) || cls.Enums.ContainsKey(name))
+                        Fail(cls.Declaration, $"Inherited field '{name}' cannot be shadowed");
                 foreach (var (name, e) in parent.Enums)
                 {
                     if (cls.Fields.ContainsKey(name) || cls.Methods.ContainsKey(name) || cls.Enums.ContainsKey(name))
@@ -180,12 +180,12 @@ sealed class Runtime
                 cls.Interfaces.UnionWith(parent.Interfaces);
             }
             foreach (var m in cls.OwnMethods.Values)
-            if (m.Override && !(cls.Parent?.Methods.ContainsKey(m.Name) ?? false))
-                Fail(m, $"override '{m.Name}' has no parent method");
+                if (m.Override && !(cls.Parent?.Methods.ContainsKey(m.Name) ?? false))
+                    Fail(m, $"override '{m.Name}' has no parent method");
             if (!cls.Abstract && !cls.IsInterface)
-            foreach (var m in cls.Methods.Values)
-            if (m.Abstract)
-                Fail(cls.Declaration, $"Concrete class '{cls.Name}' must implement abstract method '{m.Name}'");
+                foreach (var m in cls.Methods.Values)
+                    if (m.Abstract)
+                        Fail(cls.Declaration, $"Concrete class '{cls.Name}' must implement abstract method '{m.Name}'");
             visiting.Remove(cls);
             done.Add(cls);
         }
@@ -195,8 +195,8 @@ sealed class Runtime
     public static bool Subtype(Class? cls, string name)
     {
         for (var c = cls; c is not null; c = c.Parent)
-        if (c.Name == name || c.Interfaces.Contains(name))
-            return true;
+            if (c.Name == name || c.Interfaces.Contains(name))
+                return true;
         return false;
     }
     [System.Diagnostics.CodeAnalysis.DoesNotReturn] public static void Fail(Node? node, string message) => throw new Fault(message, node?.Token);
@@ -232,8 +232,8 @@ sealed class Runtime
         }
         var generic = Types.Generic(type);
         if (generic is { } g)
-        foreach (var arg in g.Args)
-            ValidateType(arg, owner, node);
+            foreach (var arg in g.Args)
+                ValidateType(arg, owner, node);
         if (Classes.ContainsKey(type) && !type.StartsWith('#') && owner?.Aliases is { } aliases && !aliases.Values.Any(a => a == type || generic is { } gn && (a == gn.Base || Types.Generic(a)?.Base == gn.Base)))
             Fail(node, $"Type '{type}' must be imported in this file");
         int dot = type.LastIndexOf('.');
@@ -466,7 +466,7 @@ sealed class Runtime
         if (b is null)
             throw new Fault("Unknown assignment target", node.Token);
         if (b.ReadOnly)
-            Fail(node, "Cannot assign to a loop counter, lifecycle field, or belongsTo reference directly");
+            Fail(node, "Cannot assign to a const binding, loop counter, lifecycle field, or belongsTo reference directly");
         return b;
     }
     void Detach(Binding b)
@@ -493,8 +493,8 @@ sealed class Runtime
                 if (child.OwnerSlot is not null && child.OwnerSlot != b)
                     Fail(node, "Object already has an owner; detach it before assigning a new owner");
                 for (var ancestor = b.Object; ancestor is not null; ancestor = ancestor.OwnerSlot?.Object)
-                if (ancestor == child)
-                    Fail(node, "Ownership cycles are forbidden");
+                    if (ancestor == child)
+                        Fail(node, "Ownership cycles are forbidden");
                 if (child.Constructing)
                     Fail(node, "Cannot take ownership of an object before its constructor finishes");
             }
@@ -572,6 +572,11 @@ sealed class Runtime
                 var previous = Read(target, node);
                 Write(target, Numbers.Convert(target.Type.TrimEnd('?'), Binary("+", previous, Numbers.Int(node.Step), node), node.Token), node);
                 return previous;
+            case "switch":
+                var selector = Eval((Node)node.Value!, scope);
+                var arm = node.Items.First(a => a.Left is null || Bool(Binary("==", selector, Eval(a.Left, scope), node), node));
+                var chosen = Eval(arm.Right!, scope);
+                return node.Type == "null" ? chosen : CheckType(node.Type, chosen, scope.Owner, node);
             case "new":
                 return Create(node.Name, node.Args.Select(a => Eval(a, scope)).ToList(), scope.Owner, node);
             case "array":
@@ -603,7 +608,8 @@ sealed class Runtime
             case "call":
                 var callee = Eval(node.Callee!, scope);
                 var args = node.Args.Select(a => Eval(a, scope)).ToList();
-                if (callee is Class constructedClass) return Create(constructedClass.Name, args, scope.Owner, node);
+                if (callee is Class constructedClass)
+                    return Create(constructedClass.Name, args, scope.Owner, node);
                 if (callee is PrintFunction)
                 {
                     Print(string.Join(' ', args.Select(x => Format(x))));
@@ -641,7 +647,7 @@ sealed class Runtime
                     Statement(s, local);
                 break;
             case "declare":
-                Declare(scope, node.Name, node.Type, node.Value is Node initial ? Eval(initial, scope) : Unset, node);
+                Declare(scope, node.Name, node.Type, node.Value is Node initial ? Eval(initial, scope) : Unset, node, node.Const);
                 break;
             case "expression":
                 Eval((Node)node.Value!, scope);
@@ -664,10 +670,13 @@ sealed class Runtime
             case "foreach":
                 var source = Eval((Node)node.Value!, scope);
                 var snapshot = source is string text ? text.EnumerateRunes().Select(c => (object?)Numbers.Character(c.ToString(), node.Token)).ToList() : new List<object?>(((Collection)source!).Items);
-                foreach (var item in snapshot) {
+                foreach (var item in snapshot)
+                {
                     Tick(node);
-                    var eachScope = new Scope(scope); Declare(eachScope, node.Name, node.Type, item, node, true);
-                    if (Loop(node.Body!, eachScope) == "break") break;
+                    var eachScope = new Scope(scope);
+                    Declare(eachScope, node.Name, node.Type, item, node, true);
+                    if (Loop(node.Body!, eachScope) == "break")
+                        break;
                 }
                 break;
             case "for":
@@ -779,8 +788,8 @@ sealed class Runtime
         if (args.Count != (ctor?.Params.Count ?? 0))
             Fail(node, $"{cls.Name} expects {ctor?.Params.Count ?? 0} arguments");
         if (ctor is not null)
-        for (int i = 0; i < args.Count; i++)
-            Declare(scope, ctor.Params[i].Name, ctor.Params[i].Type, args[i], ctor.Params[i]);
+            for (int i = 0; i < args.Count; i++)
+                Declare(scope, ctor.Params[i].Name, ctor.Params[i].Type, args[i], ctor.Params[i]);
         var first = ctor?.Body?.Statements.FirstOrDefault();
         if (cls.Parent is { } parent)
         {
@@ -789,8 +798,12 @@ sealed class Runtime
             Initialize(parent, obj, first?.Kind == "superCall" ? first.Args.Select(a => Eval(a, scope)).ToList() : [], node);
         }
         foreach (var f in cls.OwnFields.Values)
-        if (f.Init is not null)
-            Write(obj.Fields[f.Name], Eval(f.Init, scope), f);
+            if (f.Init is not null)
+            {
+                Write(obj.Fields[f.Name], Eval(f.Init, scope), f);
+                if (f.Const)
+                    obj.Fields[f.Name].ReadOnly = true;
+            }
         if (ctor is not null)
         {
             try

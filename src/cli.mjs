@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { diagnosticContext } from './diagnostics.mjs';
 import { KoleThrown } from './standard.mjs';
 import { loadProgram } from './modules.mjs';
 import path from 'node:path';
@@ -25,6 +26,7 @@ if (command === 'alex' && !file) {
     else if (error instanceof KoleError) console.error(`${error.file ?? file}:${error.line}:${error.column}: ${error.message}`);
     else if (error.code) console.error(`kole: ${error.message}`);
     else { console.error(`kole: internal error: ${error.message}`); }
+    const context = diagnosticContext(error, file); if (context) console.error(context);
     for (const frame of error.koleStack ?? []) console.error(`  at ${frame.method} (${frame.file ?? file}:${frame.line ?? 1}:${frame.column ?? 1})`);
     for (const suppressed of error.suppressed ?? []) console.error(`  suppressed: ${suppressed.message}`);
     process.exitCode = 1;

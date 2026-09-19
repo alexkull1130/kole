@@ -34,3 +34,16 @@ test('editor diagnostics use unsaved source and imported file overlays without e
  assert.deepEqual(service.analyze(file,'class Main {static main() -> void {while(true){}}}'),[]);
  }finally{fs.rmSync(dir,{recursive:true,force:true});}
 });
+test('editor understands collection loop bindings and standard Map methods',()=>{
+ const source='class Main {static main()->void {const names:List<string>(); for(name:names){print(name.length);} scores:Map<string,int>();print(scores.get("x"));}}';
+ const index=service.indexDocument(source,'Main.k');
+ const core=service.indexDocument(fs.readFileSync('stdlib/core.k','utf8'),'core.k');
+ assert.ok(service.completions(index,source.indexOf('name.length')+5,[index,core]).some(x=>x.name==='substring'));
+ const get=service.completions(index,source.indexOf('scores.get')+7,[index,core]).find(x=>x.name==='get');
+ assert.equal(get.type,'int');assert.match(get.detail,/key: string/);
+ const declaration=service.definition(index,source.indexOf('name.length')+2,[index,core]);assert.equal(declaration.name,'name');
+});
+test('editor attaches actionable hints to const reassignment diagnostics',()=>{
+ const errors=service.analyze(path.resolve('Main.k'),'class Main {static main()->void {const n:int=1;n=2;}}');
+ assert.equal(errors.length,1);assert.match(errors[0].message,/const binding/);assert.match(errors[0].message,/Hint: Use a mutable declaration/);
+});

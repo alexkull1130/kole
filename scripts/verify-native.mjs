@@ -5,7 +5,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 const executable = path.resolve(process.argv[2] ?? 'dist/kole.exe');
-const corpus = JSON.parse(fs.readFileSync(new URL('../test/native-conformance.json', import.meta.url), 'utf8'));
+const corpus = ['native-conformance.json','language-011-conformance.json'].flatMap(file => JSON.parse(fs.readFileSync(new URL('../test/'+file, import.meta.url), 'utf8')));
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'kole-conformance-'));
 const failures=[];
 try {

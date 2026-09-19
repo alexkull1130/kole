@@ -1,0 +1,291 @@
+[
+  {
+    "mode": "run",
+    "source": "class Main { static main()->void {m:Map<string,int>();m.set(\"a\",1);m.set(\"b\",2);m.set(\"a\",3);print(m.size(),m.get(\"a\"),m.keys(),m.values());print(m.remove(\"a\"),m.remove(\"z\"),m.getOrDefault(\"z\",9));m.set(\"a\",4);print(m.keys());m.clear();print(m.isEmpty());} }",
+    "entry": "Main",
+    "args": [],
+    "success": true,
+    "output": [
+      "2 3 [a, b] [3, 2]",
+      "true false 9",
+      "[b, a]",
+      "true"
+    ]
+  },
+  {
+    "mode": "run",
+    "source": "class Main { static main()->void {m:Map<string,int>();try {m.get(\"x\");}catch(e:Error){print(e.message);}} }",
+    "entry": "Main",
+    "args": [],
+    "success": true,
+    "output": [
+      "Map key not found"
+    ]
+  },
+  {
+    "mode": "run",
+    "source": "class Main { static main()->void {m:Map<string?,int?>();m.set(null,null);print(m.containsKey(null),m.get(null));} }",
+    "entry": "Main",
+    "args": [],
+    "success": true,
+    "output": [
+      "true null"
+    ]
+  },
+  {
+    "mode": "run",
+    "source": "class Main { static main()->void {a:Main();b:Main();m:Map<Main,int>();m.set(a,1);m.set(b,2);print(m.get(a),m.get(b),m.size());} }",
+    "entry": "Main",
+    "args": [],
+    "success": true,
+    "output": [
+      "1 2 2"
+    ]
+  },
+  {
+    "mode": "run",
+    "source": "class Main { static main()->void {s:Set<string>();print(s.add(\"a\"),s.add(\"a\"),s.add(\"b\"));copy:List<string>=s.toList();copy.clear();print(s.size(),s.toArray(),s.remove(\"a\"),s.remove(\"z\"));s.clear();print(s.isEmpty());} }",
+    "entry": "Main",
+    "args": [],
+    "success": true,
+    "output": [
+      "true false true",
+      "2 [a, b] true false",
+      "true"
+    ]
+  },
+  {
+    "mode": "run",
+    "source": "class Main { static main()->void {m:Map<string,List<int>>();xs:List<int>();xs.add(7);m.set(\"x\",xs);print(m.get(\"x\")[0]);} }",
+    "entry": "Main",
+    "args": [],
+    "success": true,
+    "output": [
+      "7"
+    ]
+  },
+  {
+    "mode": "run",
+    "source": "class Main { static main()->void {xs:List<int>();xs.add(1);xs.add(2);for(x:xs){xs.clear();for(y:[3,4]){if(y==3){continue;}print(x,y);break;}}for(c:\"A😀\"){print(c);}print(xs.length);} }",
+    "entry": "Main",
+    "args": [],
+    "success": true,
+    "output": [
+      "1 4",
+      "2 4",
+      "A",
+      "😀",
+      "0"
+    ]
+  },
+  {
+    "mode": "run",
+    "source": "class Main { static main()->void {m:Map<string,int>();m.set(\"a\",1);m.set(\"b\",2);for(k:m){print(k);m.clear();}s:Set<int>();s.add(1);s.add(1);s.add(2);for(x:s){print(x);s.clear();}} }",
+    "entry": "Main",
+    "args": [],
+    "success": true,
+    "output": [
+      "a",
+      "b",
+      "1",
+      "2"
+    ]
+  },
+  {
+    "mode": "run",
+    "source": "class Main { static main()->void {xs:int[]=[1,2];for(x:xs){xs[1]=9;print(x);}print(xs);} }",
+    "entry": "Main",
+    "args": [],
+    "success": true,
+    "output": [
+      "1",
+      "2",
+      "[1, 9]"
+    ]
+  },
+  {
+    "mode": "run",
+    "source": "class Main { static main()->void {n:int=1;x:int=switch(n++){case 1->7;default->1/0;};print(n,x);print(switch(\"x\"){case \"a\"->1;default->2;});} }",
+    "entry": "Main",
+    "args": [],
+    "success": true,
+    "output": [
+      "2 7",
+      "2"
+    ]
+  },
+  {
+    "mode": "run",
+    "source": "class Main {enum E { A, B } static main()->void {e:E=E.A;print(switch(e){case E.A->\"yes\";default->\"no\";});text:string?=null;print(switch(text){case null->\"empty\";default->\"text\";});xs:int[]=switch(true){case true->[];default->[1];};print(xs.length);print(switch(false){case true->1.5;default->2;}/2);} }",
+    "entry": "Main",
+    "args": [],
+    "success": true,
+    "output": [
+      "yes",
+      "empty",
+      "0",
+      "1"
+    ]
+  },
+  {
+    "mode": "run",
+    "source": "class Main { static main()->void {n:int;x:int=switch(true){case true->(n=3);default->(n=4);};print(n);} }",
+    "entry": "Main",
+    "args": [],
+    "success": true,
+    "output": [
+      "3"
+    ]
+  },
+  {
+    "mode": "run",
+    "source": "class Main {const answer:int=42;const items:List<int>(); static main()->void {const names:List<string>();names.add(\"Alex\");const xs:int[]=[1];xs[0]=2;const m:Main();m.items.add(3);print(names,xs,m.items,m.answer);} }",
+    "entry": "Main",
+    "args": [],
+    "success": true,
+    "output": [
+      "[Alex] [2] [3] 42"
+    ]
+  },
+  {
+    "mode": "run",
+    "source": "class Main { static main()->void {print(switch(1){case 0->null;default->\"x\";});print(switch(1){default->null;});} }",
+    "entry": "Main",
+    "args": [],
+    "success": true,
+    "output": [
+      "x",
+      "null"
+    ]
+  },
+  {
+    "mode": "check",
+    "source": "class Main { static main()->void {m:Map<string,int>();m.set(1,2);} }",
+    "success": false
+  },
+  {
+    "mode": "check",
+    "source": "class Main { static main()->void {m:Map<string,int>();m.set(\"x\",\"bad\");} }",
+    "success": false
+  },
+  {
+    "mode": "check",
+    "source": "class Main { static main()->void {s:Set<int>();s.add(\"bad\");} }",
+    "success": false
+  },
+  {
+    "mode": "check",
+    "source": "class Main { static main()->void {m:Map<int>();} }",
+    "success": false
+  },
+  {
+    "mode": "check",
+    "source": "class Main { static main()->void {s:Set<int,string>();} }",
+    "success": false
+  },
+  {
+    "mode": "check",
+    "source": "class Main { static main()->void {for(x:[1]){x=2;}} }",
+    "success": false
+  },
+  {
+    "mode": "check",
+    "source": "class Main { static main()->void {for(x:1){}} }",
+    "success": false
+  },
+  {
+    "mode": "check",
+    "source": "class Main { static main()->void {xs:List<int>?=null;for(x:xs){}} }",
+    "success": false
+  },
+  {
+    "mode": "check",
+    "source": "class Main { static main()->void {for(x:[1]){}print(x);} }",
+    "success": false
+  },
+  {
+    "mode": "check",
+    "source": "class Main { static main()->void {n:int;for(x:[1]){n=x;}print(n);} }",
+    "success": false
+  },
+  {
+    "mode": "check",
+    "source": "class Main { static main()->void {print(switch(1){case 1->2;});} }",
+    "success": false
+  },
+  {
+    "mode": "check",
+    "source": "class Main { static main()->void {print(switch(1){case 1->2;case 1.0->3;default->0;});} }",
+    "success": false
+  },
+  {
+    "mode": "check",
+    "source": "class Main { static main()->void {n:int=1;print(switch(n){case n->2;default->0;});} }",
+    "success": false
+  },
+  {
+    "mode": "check",
+    "source": "class Main { static main()->void {print(switch(1){case 1->\"a\";default->2;});} }",
+    "success": false
+  },
+  {
+    "mode": "check",
+    "source": "class Main { static main()->void {print(switch(1){default->0;case 1->2;});} }",
+    "success": false
+  },
+  {
+    "mode": "check",
+    "source": "class Main { static main()->void {n:int;x:int=switch(true){case true->(n=3);default->4;};print(n);} }",
+    "success": false
+  },
+  {
+    "mode": "check",
+    "source": "class Main { static main()->void {const n:int=1;n=2;} }",
+    "success": false
+  },
+  {
+    "mode": "check",
+    "source": "class Main { static main()->void {const n:int=1;n++;} }",
+    "success": false
+  },
+  {
+    "mode": "check",
+    "source": "class Main { static main()->void {const n:int=1;n+=2;} }",
+    "success": false
+  },
+  {
+    "mode": "check",
+    "source": "class Main { static main()->void {const n:int;} }",
+    "success": false
+  },
+  {
+    "mode": "check",
+    "source": "class Main { static main()->void {const const n:int=1;} }",
+    "success": false
+  },
+  {
+    "mode": "check",
+    "source": "class Main {const n:int=1; static main()->void {m:Main();m.n=2;} }",
+    "success": false
+  },
+  {
+    "mode": "check",
+    "source": "class Main {const n:int; static main()->void {} }",
+    "success": false
+  },
+  {
+    "mode": "check",
+    "source": "class Main {const f()->int{return 1;} static main()->void {} }",
+    "success": false
+  },
+  {
+    "mode": "check",
+    "source": "class Main {const enum E { A } static main()->void {} }",
+    "success": false
+  },
+  {
+    "mode": "check",
+    "source": "class Main {enum E { A, B } static main()->void {print(switch(E.A){case E.A->1;case E.A->2;default->0;});} }",
+    "success": false
+  }
+]

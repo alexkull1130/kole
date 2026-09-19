@@ -12,8 +12,8 @@ sealed class Initialization(Class cls)
     {
         var result = new Dictionary<string, HashSet<Node>>();
         foreach (var flow in flows)
-        foreach (var (kind, state) in flow)
-            result[kind] = Intersect(result.GetValueOrDefault(kind), state)!;
+            foreach (var (kind, state) in flow)
+                result[kind] = Intersect(result.GetValueOrDefault(kind), state)!;
         return result;
     }
     bool Complete(HashSet<Node> state) => cls.Fields.Values.All(state.Contains);
@@ -94,6 +94,10 @@ sealed class Initialization(Class cls)
                 state = Expression(node.Callee!, scope, state);
                 foreach (var arg in node.Args)
                     state = Expression(arg, scope, state);
+                break;
+            case "switch":
+                var switchReady = Expression((Node)node.Value!, scope, state);
+                state = node.Items.Select(arm => Expression(arm.Right!, scope, new HashSet<Node>(switchReady))).Aggregate((a, b) => Intersect(a, b)!);
                 break;
             case "new":
             case "newList":
@@ -226,11 +230,11 @@ sealed class Initialization(Class cls)
         constructing = true;
         var initialized = cls.Fields.Values.Where(f => f.Relationship == "belongsTo" || f.Owner != cls).ToHashSet();
         foreach (var field in cls.OwnFields.Values)
-        if (field.Init is not null)
-        {
-            initialized = Expression(field.Init, new(), initialized);
-            initialized.Add(field);
-        }
+            if (field.Init is not null)
+            {
+                initialized = Expression(field.Init, new(), initialized);
+                initialized.Add(field);
+            }
         var ctor = cls.Methods.GetValueOrDefault(cls.Name);
         var exits = new Dictionary<string, HashSet<Node>> { { "normal", initialized } };
         if (ctor is not null)
@@ -255,10 +259,10 @@ sealed class Initialization(Class cls)
             }, scope, state);
         }
         foreach (var (kind, state) in exits)
-        if (kind is "normal" or "return")
-        foreach (var field in cls.Fields.Values)
-        if (!state.Contains(field))
-            Runtime.Fail(ctor ?? field, $"Field '{field.Name}' must be initialized on every constructor path");
+            if (kind is "normal" or "return")
+                foreach (var field in cls.Fields.Values)
+                    if (!state.Contains(field))
+                        Runtime.Fail(ctor ?? field, $"Field '{field.Name}' must be initialized on every constructor path");
         constructing = false;
         foreach (var method in cls.OwnMethods.Values)
         {

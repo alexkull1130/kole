@@ -8,5 +8,6 @@
     <InvariantGlobalization>true</InvariantGlobalization>
     <IsAotCompatible>true</IsAotCompatible>
   </PropertyGroup>
-  <ItemGroup><EmbeddedResource Include="../stdlib/core.k" LogicalName="core.k" /></ItemGroup>
+  <ItemGroup><EmbeddedResource Include="../stdlib/core.k" LogicalName="core.k" />  <EmbeddedResource Include="../stdlib/diagnostics.json" LogicalName="diagnostics.json" />
+  </ItemGroup>
 </Project>

@@ -1,0 +1,15 @@
+[
+  {"pattern":"Cannot assign to a const binding","hint":"Use a mutable declaration without const if this binding must change. Loop variables and protected fields cannot be assigned directly."},
+  {"pattern":"const requires|const fields require","hint":"Initialize the const binding where it is declared, for example: const count: int = 1;"},
+  {"pattern":"Switch expression requires a default","hint":"Add a final fallback arm: default -> value;"},
+  {"pattern":"Duplicate switch case","hint":"Remove or combine the repeated case; each value can appear only once."},
+  {"pattern":"Switch cases require","hint":"Use a literal such as 1 or \"open\", or an enum value, as the case label."},
+  {"pattern":"Switch arms need|Expected .+, received","hint":"Make the result match its declared type. Use an explicit conversion only when that conversion is supported."},
+  {"pattern":"Collection loop requires","hint":"Iterate an array, List, Set, Map, or string. Check nullable collections against null first."},
+  {"pattern":"nullable|null first","hint":"Copy the value to a local binding if needed, then guard its use with if(value != null)."},
+  {"pattern":"before.*initializ|not been initialized","hint":"Assign a value on every path before reading it; a loop may execute zero times."},
+  {"pattern":"Unknown name","hint":"Check the spelling, declare the name in this scope, or import the class that defines it."},
+  {"pattern":"Unknown member|Cannot access","hint":"Check the receiver's type and member spelling. Use me.member for the current object's members."},
+  {"pattern":"Expected ';'","hint":"End this declaration or expression with a semicolon."},
+  {"pattern":"expects .*arguments|expects .*argument","hint":"Match the argument count and order in the method or constructor declaration."}
+]

@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ['native/**', 'stdlib/**', 'scripts/verify-native.mjs', 'test/native-conformance.json', '.github/workflows/native-windows.yml']
+    paths: ['native/**', 'stdlib/**', 'scripts/verify-native.mjs', 'test/native-conformance.json', 'test/language-011-conformance.json', 'test/diagnostics.test.mjs', '.github/workflows/native-windows.yml']
 permissions:
   contents: read
 jobs:
@@ -22,6 +22,10 @@ jobs:
         run: dotnet publish native/Kole.csproj -c Release -r win-x64 -p:PublishAot=true -p:StripSymbols=true -o dist
       - name: Verify language conformance
         run: node scripts/verify-native.mjs dist/kole.exe
+      - name: Verify source diagnostics
+        run: node --test test/diagnostics.test.mjs
+        env:
+          KOLE_TEST_NATIVE: dist/kole.exe
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: kole-windows-x64

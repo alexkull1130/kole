@@ -105,3 +105,5 @@ Arrays and Lists both provide `get(int)`, `set(int, A)`, `isEmpty()`, `contains(
 Lists additionally provide `addAll(values: A[])`, `insert(index: int, value: A)`, and `remove(value: A) -> bool` alongside their original methods. Remove deletes the first match. Insert permits index equal to length. Arrays remain fixed-length.
 
 Try `.\kole.cmd run examples\Methods.k`.
+
+Map<A,B> and Set<A> are now part of the standard library. See [Kole 0.11 additions](language-011.md) for methods, equality, ordering, complexity, and iteration rules.

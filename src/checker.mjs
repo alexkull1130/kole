@@ -57,7 +57,7 @@ class Checker {
   }
   field(cls, field, scope, node) {
     this.access(field, cls, scope, node);
-    return { ...value(this.type(field.type, field.owner ?? cls, field)), writable: !field.lifecycle && field.relationship !== 'belongsTo' };
+    return { ...value(this.type(field.type, field.owner ?? cls, field)), writable: !field.isConst && !field.lifecycle && field.relationship !== 'belongsTo' };
   }
   member(object, name, scope, node) {
     if (object.kind === 'value' && (object.type === 'null' || object.type.endsWith('?'))) this.fail(node, `Cannot access '${name}' on nullable ${object.type}; check a local value against null first`);
@@ -112,7 +112,7 @@ class Checker {
   }
   target(node, scope) {
     const target = this.expression(node, scope);
-    if (!target.writable) this.fail(node, 'Cannot assign to a loop counter, lifecycle field, belongsTo reference, or non-writable expression');
+    if (!target.writable) this.fail(node, 'Cannot assign to a const binding, loop counter, lifecycle field, belongsTo reference, or non-writable expression');
     return { ...target, readType: target.type, type: target.declaredType ?? target.type };
   }
   arguments(method, cls, args, scope, node) {
@@ -187,6 +187,32 @@ class Checker {
         const target = this.target(node.value, scope);
         if (!numeric(target.readType)) this.fail(node, 'Increment/decrement requires a number');
         return value(target.readType);
+      }
+      case 'switch': {
+        const selector = this.expression(node.value, scope); this.requireValue(selector, node.value);
+        const labels = new Set(), branches = [], results = [];
+        for (const arm of node.arms) {
+          if (arm.label) {
+            const label = this.expression(arm.label, scope);
+            const enumeration = arm.label.kind === 'member' && this.expression(arm.label.object, scope).kind === 'enum';
+            if (arm.label.kind !== 'literal' && !enumeration) this.fail(arm.label, 'Switch cases require literals or enum values');
+            this.binary('==', selector, label, arm.label);
+            const key = enumeration ? label.type + ':' + arm.label.name : (numeric(label.type) ? 'number' : label.type) + ':' + this.runtime.format(arm.label.value);
+            if (labels.has(key)) this.fail(arm.label, 'Duplicate switch case'); labels.add(key);
+          }
+          const branch = new Scope(scope), result = this.expression(arm.result, branch, expectedType);
+          this.requireValue(result, arm.result); branches.push(branch); results.push(result);
+        }
+        let type = expectedType ?? results[0].type;
+        if (!expectedType) for (const result of results.slice(1)) {
+          if (this.assignable(type, result.type)) continue;
+          if (this.assignable(result.type, type)) type = result.type;
+          else if (type === 'null') type = result.type.endsWith('?') ? result.type : result.type + '?';
+          else if (result.type === 'null') type = type.endsWith('?') ? type : type + '?';
+          else this.fail(node, 'Switch arms need a common type; declare a result type');
+        }
+        results.forEach((result,i) => this.expect(type, result, node.arms[i].result));
+        node.type = type; scope.facts = this.commonFacts(branches); return value(type);
       }
       case 'new': {
         const cls = this.classes.get(node.name);
@@ -302,7 +328,7 @@ class Checker {
         const type = this.type(node.type, scope.owner, node);
         const initial = node.value ? this.expression(node.value, scope, type) : null;
         if (initial) this.expect(type, initial, node.value);
-        const binding = this.declare(scope, node.name, type, node);
+        const binding = this.declare(scope, node.name, type, node, node.isConst);
         if (type.endsWith('?') && initial && initial.type !== 'null' && !initial.type.endsWith('?')) scope.facts.set(binding, type.slice(0, -1));
         break;
       }

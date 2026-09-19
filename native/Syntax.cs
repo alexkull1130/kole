@@ -15,7 +15,7 @@ sealed class Node(string kind = "", Token? token = null)
 {
     public string Kind = kind, Name = "", Type = "", Op = "", Access = "public", Parent = "", From = "", To = "", Relationship = "", Native = "", ResolvedElementType = "", Package = "";
     public Token Token = token ?? new("", "");
-    public bool Static, Abstract, Override, Constructor, Interface, Lifecycle;
+    public bool Static, Abstract, Override, Constructor, Interface, Lifecycle, Const;
     public int Step;
     public object? Value;
     public Node? Left, Right, Object, Index, Body, Condition, Yes, No, Start, End, Init, Finalizer, Callee;
@@ -58,11 +58,11 @@ sealed class Node(string kind = "", Token? token = null)
     public IEnumerable<Node> Children()
     {
         foreach (var n in new[] { Left, Right, Object, Index, Body, Condition, Yes, No, Start, End, Init, Finalizer, Callee, Value as Node })
-        if (n is not null)
-            yield return n;
+            if (n is not null)
+                yield return n;
         foreach (var list in new[] { Members, Params, Args, Statements, Items, Catches })
-        foreach (var n in list)
-            yield return n;
+            foreach (var n in list)
+                yield return n;
     }
 }
 
@@ -242,7 +242,7 @@ static class Lexer
 sealed class Parser(List<Token> tokens)
 {
     int pos, loops;
-    static readonly HashSet<string> Reserved = ["try", "catch", "finally", "throw", "using", "package", "import", "extends", "override", "abstract", "super", "class", "interface", "implements", "public", "private", "static", "enum", "state", "requires", "transitions", "require", "if", "else", "while", "for", "return", "break", "continue", "new", "me", "this", "true", "false", "null", "owns", "belongsTo", "atomic"];
+    static readonly HashSet<string> Reserved = ["const", "switch", "case", "default", "try", "catch", "finally", "throw", "using", "package", "import", "extends", "override", "abstract", "super", "class", "interface", "implements", "public", "private", "static", "enum", "state", "requires", "transitions", "require", "if", "else", "while", "for", "return", "break", "continue", "new", "me", "this", "true", "false", "null", "owns", "belongsTo", "atomic"];
     static readonly Dictionary<string, int> Ranks = new() { ["="] = 1, ["+="] = 1, ["-="] = 1, ["||"] = 2, ["&&"] = 3, ["=="] = 4, ["!="] = 4, ["<"] = 5, [">"] = 5, ["<="] = 5, [">="] = 5, ["+"] = 6, ["-"] = 6, ["*"] = 7, ["/"] = 7, ["%"] = 7 };
     Token Peek(int n = 0) => tokens[Math.Min(pos + n, tokens.Count - 1)];
     bool At(string text) => Peek().Text == text && Peek().Kind is not ("string" or "char");
@@ -320,13 +320,16 @@ sealed class Parser(List<Token> tokens)
     {
         var n = new Node();
         var seen = new HashSet<string>();
-        while (new[] { "public", "private", "static", "abstract", "override" }.Any(At))
+        while (new[] { "public", "private", "static", "abstract", "override", "const" }.Any(At))
         {
             var t = Take();
             if (!seen.Add(t.Text) || (t.Text is "public" or "private" && seen.Contains(t.Text == "public" ? "private" : "public")))
                 throw new Fault("Conflicting modifier", t);
             switch (t.Text)
             {
+                case "const":
+                    n.Const = true;
+                    break;
                 case "static":
                     n.Static = true;
                     break;
@@ -402,6 +405,8 @@ sealed class Parser(List<Token> tokens)
             m.Token = t;
             if (Match("enum"))
             {
+                if (m.Const)
+                    throw new Fault("const applies to fields and local bindings only", t);
                 if (n.Interface || m.Abstract || m.Override)
                     throw new Fault("Invalid enum declaration", t);
                 m.Kind = "enum";
@@ -439,6 +444,8 @@ sealed class Parser(List<Token> tokens)
             }
             if (!(modern && m.Type != "" && !m.Constructor) && Match("("))
             {
+                if (m.Const)
+                    throw new Fault("const applies to fields and local bindings only", t);
                 m.Kind = "method";
                 if (modern && m.Type != "" && !m.Constructor)
                     throw new Fault("Methods use return arrows", t);
@@ -503,6 +510,8 @@ sealed class Parser(List<Token> tokens)
                     m.Init = Construct(m.Type, t);
                 else if (Match("="))
                     m.Init = Expression();
+                if (m.Const && (m.Init is null || m.Lifecycle || m.Relationship != ""))
+                    throw new Fault("const fields require an initializer and cannot be state or relationship fields", t);
                 Expect(";");
             }
             n.Members.Add(m);
@@ -527,6 +536,14 @@ sealed class Parser(List<Token> tokens)
         var t = Peek();
         if (At("{"))
             return Block();
+        if (Match("const"))
+        {
+            var declaration = Statement();
+            if (declaration.Kind != "declare" || declaration.Value is null || declaration.Const)
+                throw new Fault("const requires a declaration with an initializer", t);
+            declaration.Const = true;
+            return declaration;
+        }
         if (Match("throw"))
         {
             var n = new Node("throw", t) { Value = Expression() };
@@ -575,9 +592,15 @@ sealed class Parser(List<Token> tokens)
         {
             Expect("(");
             var n = new Node("for", t) { Name = Name() };
-            if (Match(":")) {
-                n.Kind = "foreach"; n.Value = Expression(); Expect(")");
-                loops++; n.Body = Block(); loops--; return n;
+            if (Match(":"))
+            {
+                n.Kind = "foreach";
+                n.Value = Expression();
+                Expect(")");
+                loops++;
+                n.Body = Block();
+                loops--;
+                return n;
             }
             Expect("=");
             n.Start = Expression();
@@ -759,7 +782,11 @@ sealed class Parser(List<Token> tokens)
     Node Construct(string name, Token token)
     {
         Expect("(");
-        return new(name.StartsWith("List<") && name.EndsWith('>') ? "newList" : "new", token) { Name = name, Args = Arguments() };
+        return new(name.StartsWith("List<") && name.EndsWith('>') ? "newList" : "new", token)
+        {
+            Name = name,
+            Args = Arguments()
+        };
     }
     Node Primary()
     {
@@ -792,6 +819,39 @@ sealed class Parser(List<Token> tokens)
             };
         if (Match("null"))
             return new("literal", t);
+        if (Match("switch"))
+        {
+            Expect("(");
+            var n = new Node("switch", t) { Value = Expression() };
+            Expect(")");
+            Expect("{");
+            bool fallback = false;
+            while (!At("}"))
+            {
+                var arm = new Node("arm", Peek());
+                if (Match("case"))
+                {
+                    if (fallback)
+                        throw new Fault("default must be the last switch arm", arm.Token);
+                    arm.Left = Expression();
+                }
+                else
+                {
+                    Expect("default");
+                    if (fallback)
+                        throw new Fault("Duplicate default arm", arm.Token);
+                    fallback = true;
+                }
+                Expect("->");
+                arm.Right = Expression();
+                Expect(";");
+                n.Items.Add(arm);
+            }
+            Expect("}");
+            if (!fallback)
+                throw new Fault("Switch expression requires a default arm", t);
+            return n;
+        }
         if (Match("new"))
         {
             string name = Type();
@@ -843,9 +903,16 @@ sealed class Parser(List<Token> tokens)
             int saved = pos;
             var original = tokens.ToList();
             string? name = null;
-            try { name = Type(); } catch (Fault) { }
-            if (name is not null && At("(")) return Construct(name, t);
-            pos = saved; tokens.Clear(); tokens.AddRange(original);
+            try
+            {
+                name = Type();
+            }
+            catch (Fault) { }
+            if (name is not null && At("("))
+                return Construct(name, t);
+            pos = saved;
+            tokens.Clear();
+            tokens.AddRange(original);
         }
         if (t.Kind == "identifier")
             return new("name", t)
