@@ -7,3 +7,6 @@ dist/
 tasks.txt
 
 /kole.exe
+
+# Local adventure progress
+*.save

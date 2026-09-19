@@ -18,6 +18,7 @@ Download `kole.exe` from the private repository release (or Native Windows build
 
 ```powershell
 .\kole.cmd run examples\Hello.k
+.\kole.cmd run examples\adventure\Adventure.k
 .\kole.cmd run examples\tasks\TaskManager.k tasks.txt
 .\kole.cmd run examples\Point.k
 .\kole.cmd run examples\Connection.k
@@ -155,3 +156,7 @@ public class Order {
 Java is a design influence only. Java source compatibility, Java interoperability, and JVM targeting are not requirements for kole.
 
 See [construction syntax](docs/construction.md) for declarations such as `names: List<string>();` and reassignment with `names = List<string>();`.
+
+## Mini project: Coal Mine
+
+Play and extend the [Coal Mine adventure](examples/adventure/README.md), a multi-file Kole project with exploration, an inventory, a puzzle, and saved progress.
