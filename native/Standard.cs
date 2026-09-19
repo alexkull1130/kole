@@ -7,7 +7,7 @@ namespace Kole;
 
 static class Standard
 {
-    public static readonly string[] Names = ["Error", "RuntimeError", "IOError", "Closeable", "Console", "File", "TextFile", "Math", "Int", "Float"];
+    public static readonly string[] Names = ["Error", "RuntimeError", "IOError", "Closeable", "Console", "File", "TextFile", "Math", "Int", "Float", "Map", "Set"];
     public static List<Node> With(List<Node> program)
     {
         using var stream = typeof(Standard).Assembly.GetManifestResourceStream("core.k")!;

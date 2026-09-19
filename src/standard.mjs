@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { number } from './numbers.mjs';
 import { parse } from './parser.mjs';
 
-export const standardNames = ['Error', 'RuntimeError', 'IOError', 'Closeable', 'Console', 'File', 'TextFile', 'Math', 'Int', 'Float'];
+export const standardNames = ['Error', 'RuntimeError', 'IOError', 'Closeable', 'Console', 'File', 'TextFile', 'Math', 'Int', 'Float', 'Map', 'Set'];
 export function withStandard(program) {
   const standard = parse(fs.readFileSync(new URL('../stdlib/core.k', import.meta.url), 'utf8'), '<kole>');
   for (const cls of standard.classes) if (['Console', 'File', 'TextFile', 'Math', 'Int', 'Float'].includes(cls.name)) for (const method of cls.members) if (method.kind === 'method' && !method.constructor) method.native = cls.name + '.' + method.name;
