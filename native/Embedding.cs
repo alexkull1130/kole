@@ -6,6 +6,18 @@ namespace Kole;
 /// Stable host boundary. The exported functions intentionally use only C ABI types.
 public static unsafe class Embedding
 {
+    sealed class Domain
+    {
+        public bool Open = true;
+        public List<Subscription> Subscriptions = [];
+    }
+    sealed class Subscription
+    {
+        public required Domain Owner;
+        public IntPtr Callback;
+        public IntPtr Context;
+        public bool Active = true;
+    }
     sealed class Session
     {
         public Runtime? Runtime;
@@ -20,6 +32,21 @@ public static unsafe class Embedding
     }
 
     static Session? Get(IntPtr handle) => handle == IntPtr.Zero ? null : GCHandle.FromIntPtr(handle).Target as Session;
+    static Domain? GetDomain(IntPtr handle) => handle == IntPtr.Zero ? null : GCHandle.FromIntPtr(handle).Target as Domain;
+    static Subscription? GetSubscription(IntPtr handle) => handle == IntPtr.Zero ? null : GCHandle.FromIntPtr(handle).Target as Subscription;
+    static void Close(Domain? domain)
+    {
+        if (domain is null || !domain.Open) return;
+        domain.Open = false;
+        foreach (var subscription in domain.Subscriptions) subscription.Active = false;
+        domain.Subscriptions.Clear();
+    }
+    static void Cancel(Subscription? subscription)
+    {
+        if (subscription is null) return;
+        subscription.Active = false;
+        subscription.Owner.Subscriptions.Remove(subscription);
+    }
 
     [UnmanagedCallersOnly(EntryPoint = "kole_runtime_create")]
     public static IntPtr Create() => GCHandle.ToIntPtr(GCHandle.Alloc(new Session()));
@@ -61,5 +88,58 @@ public static unsafe class Embedding
         if (session?.Runtime is null) return 0;
         try { session.Runtime.Run(Marshal.PtrToStringUTF8((IntPtr)entry) ?? "", []); session.SetError(""); return 1; }
         catch (Exception error) { session.SetError(error.Message); return 0; }
+    }
+
+    // A domain owns its subscriptions. Closing it is idempotent and prevents every later callback.
+    [UnmanagedCallersOnly(EntryPoint = "kole_domain_create")]
+    public static IntPtr CreateDomain() => GCHandle.ToIntPtr(GCHandle.Alloc(new Domain()));
+
+    [UnmanagedCallersOnly(EntryPoint = "kole_domain_close")]
+    public static void CloseDomain(IntPtr handle)
+    {
+        Close(GetDomain(handle));
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "kole_domain_destroy")]
+    public static void DestroyDomain(IntPtr handle)
+    {
+        if (handle == IntPtr.Zero) return;
+        Close(GetDomain(handle));
+        GCHandle.FromIntPtr(handle).Free();
+    }
+
+    // callback and payload are opaque host pointers. Callbacks only run while their owner is open.
+    [UnmanagedCallersOnly(EntryPoint = "kole_domain_subscribe")]
+    public static IntPtr Subscribe(IntPtr handle, IntPtr callback, IntPtr context)
+    {
+        var domain = GetDomain(handle);
+        if (domain is null || !domain.Open || callback == IntPtr.Zero) return IntPtr.Zero;
+        var subscription = new Subscription { Owner = domain, Callback = callback, Context = context };
+        domain.Subscriptions.Add(subscription);
+        return GCHandle.ToIntPtr(GCHandle.Alloc(subscription));
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "kole_subscription_cancel")]
+    public static void CancelSubscription(IntPtr handle)
+    {
+        Cancel(GetSubscription(handle));
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "kole_subscription_destroy")]
+    public static void DestroySubscription(IntPtr handle)
+    {
+        if (handle == IntPtr.Zero) return;
+        Cancel(GetSubscription(handle));
+        GCHandle.FromIntPtr(handle).Free();
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "kole_domain_publish")]
+    public static void Publish(IntPtr handle, IntPtr payload)
+    {
+        var domain = GetDomain(handle);
+        if (domain is null || !domain.Open) return;
+        foreach (var subscription in domain.Subscriptions.ToArray())
+            if (subscription.Active)
+                ((delegate* unmanaged<IntPtr, IntPtr, void>)subscription.Callback)(subscription.Context, payload);
     }
 }
