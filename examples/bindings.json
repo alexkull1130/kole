@@ -1,0 +1,12 @@
+{
+  "classes": [
+    {
+      "name": "FileWatcher",
+      "closeable": true,
+      "methods": [
+        { "name": "close", "returns": "void" },
+        { "name": "path", "returns": "string" }
+      ]
+    }
+  ]
+}
