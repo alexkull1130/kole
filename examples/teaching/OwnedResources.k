@@ -23,6 +23,9 @@ class Project implements Closeable {
         second.close();
         first.close();
     }
+}
+
+class OwnedResources {
     static main() -> void {
         project: Project();
         project.close();
