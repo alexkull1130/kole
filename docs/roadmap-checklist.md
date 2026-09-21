@@ -11,6 +11,6 @@ This checklist ties the product direction to working artifacts. A checked item h
 - [x] **VS Code ownership diagnostics:** relationship failures include editor hints for nullable back-references, matching owners, ambiguity, cycles, and safe ownership updates.
 - [x] **Flagship native-host demonstration (initial):** `examples/LifecycleDomain.k` demonstrates deterministic reverse cleanup and is covered by the lifecycle conformance test.
 - [x] **CLI libraries:** `Console`, `File`, and `TextFile` provide the first resource-safe CLI library; `LineCount.k` proves deterministic streaming cleanup with `using`.
-- [ ] **Teaching adoption:** publish a tutorial and classroom-sized exercises after the host workflow and CLI libraries are stable.
+- [x] **Teaching adoption:** the first lifecycle lesson, five classroom-sized exercises, and a runnable owned-resource example are published under `docs/teaching`.
 
 The unchecked items are sequenced behind the host boundary. The next slices are the binding generator and owner-bound callbacks; both depend on the handle and error conventions in `include/kole.h`.
