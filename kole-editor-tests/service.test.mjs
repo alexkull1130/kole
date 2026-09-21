@@ -47,3 +47,8 @@ test('editor attaches actionable hints to const reassignment diagnostics',()=>{
  const errors=service.analyze(path.resolve('Main.k'),'class Main {static main()->void {const n:int=1;n=2;}}');
  assert.equal(errors.length,1);assert.match(errors[0].message,/const binding/);assert.match(errors[0].message,/Hint: Use a mutable declaration/);
 });
+
+test('editor attaches ownership-specific hints to relationship diagnostics',()=>{
+ const errors=service.analyze(path.resolve('Main.k'),'class Child {belongsTo parent: Parent;} class Parent {owns child: Child?=null;}');
+ assert.equal(errors.length,1);assert.match(errors[0].message,/belongsTo must be nullable/);assert.match(errors[0].message,/Kole maintains it when ownership changes/);
+});
