@@ -12,7 +12,7 @@ The current language already provides the pieces used by the contract:
 
 The first host integration rule is intentionally conservative: a host must keep a resource inside its owning object or inside a `using` scope. A callback may capture a resource only while its owner is alive. After cleanup, calls fail with a typed `IOError` or host-specific error rather than operating on a stale handle.
 
-The next runtime slice will add an explicit owner close operation and owner-bound callback registration. Until then, a domain can be modeled with a `Closeable` owner method that closes its owned resources in reverse declaration order. Native bindings should expose the same rule through a stable C-compatible host API instead of asking each script to remember cleanup conventions.
+The native embedding API now provides an explicit lifecycle domain and owner-bound callback registration. `kole_domain_close` is idempotent, cancels every subscription owned by the domain, and guarantees that a later `kole_domain_publish` cannot invoke those callbacks. Native bindings expose the same rule through a stable C-compatible host API instead of asking each script to remember cleanup conventions.
 
 ## Example boundary
 
