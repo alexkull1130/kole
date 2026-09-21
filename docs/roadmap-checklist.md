@@ -10,7 +10,7 @@ This checklist ties the product direction to working artifacts. A checked item h
 - [x] **Hot reload lifecycle policy:** `kole_domain_replace` deliberately closes and replaces a domain; callbacks and tasks never cross the reload boundary.
 - [x] **VS Code ownership diagnostics:** relationship failures include editor hints for nullable back-references, matching owners, ambiguity, cycles, and safe ownership updates.
 - [x] **Flagship native-host demonstration (initial):** `examples/LifecycleDomain.k` demonstrates deterministic reverse cleanup and is covered by the lifecycle conformance test.
-- [ ] **CLI libraries:** build the first standard library around file/process/network resources and use it as the resource-handling proof case.
+- [x] **CLI libraries:** `Console`, `File`, and `TextFile` provide the first resource-safe CLI library; `LineCount.k` proves deterministic streaming cleanup with `using`.
 - [ ] **Teaching adoption:** publish a tutorial and classroom-sized exercises after the host workflow and CLI libraries are stable.
 
 The unchecked items are sequenced behind the host boundary. The next slices are the binding generator and owner-bound callbacks; both depend on the handle and error conventions in `include/kole.h`.
