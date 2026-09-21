@@ -6,7 +6,7 @@ This checklist ties the product direction to working artifacts. A checked item h
 - [x] **Stable C embedding API (first slice):** `include/kole.h` defines a C ABI for creating, loading/checking, running, reading errors, and destroying a runtime. Exports are implemented in `native/Embedding.cs`.
 - [x] **Native binding generator:** `scripts/generate-bindings.mjs` generates Kole declarations and C shims from a host manifest with lifecycle-aware classes.
 - [x] **Safe callbacks and event subscriptions:** C host subscriptions are bound to a lifecycle domain; closing the domain cancels them and blocks future event delivery.
-- [ ] **Structured concurrency:** background tasks will be children of a lifecycle domain and joined or cancelled during close.
+- [x] **Structured concurrency:** host tasks are children of a lifecycle domain, driven through `kole_domain_poll`, and cancelled when the domain closes.
 - [ ] **Hot reload lifecycle policy:** reload will preserve a domain only when its schema is compatible; otherwise it will close and replace it deterministically.
 - [ ] **VS Code ownership diagnostics:** add code actions and diagnostics for escaping owned values, missing `override`, and callbacks that outlive owners.
 - [x] **Flagship native-host demonstration (initial):** `examples/LifecycleDomain.k` demonstrates deterministic reverse cleanup and is covered by the lifecycle conformance test.

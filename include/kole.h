@@ -21,6 +21,13 @@ void kole_subscription_cancel(void* subscription);
 void kole_subscription_destroy(void* subscription);
 void kole_domain_publish(void* domain, void* payload);
 
+/* Structured host tasks. Work is polled by the owner and returns nonzero when complete. */
+typedef int (*kole_task_work)(void* context);
+void* kole_domain_start_task(void* domain, kole_task_work work, void* context);
+void kole_domain_poll(void* domain);
+void kole_task_cancel(void* task);
+void kole_task_destroy(void* task);
+
 #ifdef __cplusplus
 }
 #endif
