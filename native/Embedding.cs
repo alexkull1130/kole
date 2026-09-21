@@ -10,11 +10,19 @@ public static unsafe class Embedding
     {
         public bool Open = true;
         public List<Subscription> Subscriptions = [];
+        public List<HostTask> Tasks = [];
     }
     sealed class Subscription
     {
         public required Domain Owner;
         public IntPtr Callback;
+        public IntPtr Context;
+        public bool Active = true;
+    }
+    sealed class HostTask
+    {
+        public required Domain Owner;
+        public IntPtr Work;
         public IntPtr Context;
         public bool Active = true;
     }
@@ -34,12 +42,15 @@ public static unsafe class Embedding
     static Session? Get(IntPtr handle) => handle == IntPtr.Zero ? null : GCHandle.FromIntPtr(handle).Target as Session;
     static Domain? GetDomain(IntPtr handle) => handle == IntPtr.Zero ? null : GCHandle.FromIntPtr(handle).Target as Domain;
     static Subscription? GetSubscription(IntPtr handle) => handle == IntPtr.Zero ? null : GCHandle.FromIntPtr(handle).Target as Subscription;
+    static HostTask? GetTask(IntPtr handle) => handle == IntPtr.Zero ? null : GCHandle.FromIntPtr(handle).Target as HostTask;
     static void Close(Domain? domain)
     {
         if (domain is null || !domain.Open) return;
         domain.Open = false;
         foreach (var subscription in domain.Subscriptions) subscription.Active = false;
         domain.Subscriptions.Clear();
+        foreach (var task in domain.Tasks) task.Active = false;
+        domain.Tasks.Clear();
     }
     static void Cancel(Subscription? subscription)
     {
@@ -141,5 +152,52 @@ public static unsafe class Embedding
         foreach (var subscription in domain.Subscriptions.ToArray())
             if (subscription.Active)
                 ((delegate* unmanaged<IntPtr, IntPtr, void>)subscription.Callback)(subscription.Context, payload);
+    }
+
+    // Work returns nonzero when finished. The host drives work with poll, avoiding detached tasks.
+    [UnmanagedCallersOnly(EntryPoint = "kole_domain_start_task")]
+    public static IntPtr StartTask(IntPtr handle, IntPtr work, IntPtr context)
+    {
+        var domain = GetDomain(handle);
+        if (domain is null || !domain.Open || work == IntPtr.Zero) return IntPtr.Zero;
+        var task = new HostTask { Owner = domain, Work = work, Context = context };
+        domain.Tasks.Add(task);
+        return GCHandle.ToIntPtr(GCHandle.Alloc(task));
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "kole_domain_poll")]
+    public static void Poll(IntPtr handle)
+    {
+        var domain = GetDomain(handle);
+        if (domain is null || !domain.Open) return;
+        foreach (var task in domain.Tasks.ToArray())
+            if (task.Active && ((delegate* unmanaged<IntPtr, int>)task.Work)(task.Context) != 0)
+            {
+                task.Active = false;
+                domain.Tasks.Remove(task);
+            }
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "kole_task_cancel")]
+    public static void CancelTask(IntPtr handle)
+    {
+        var task = GetTask(handle);
+        if (task is null) return;
+        task.Active = false;
+        task.Owner.Tasks.Remove(task);
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "kole_task_destroy")]
+    public static void DestroyTask(IntPtr handle)
+    {
+        if (handle == IntPtr.Zero) return;
+        CancelTaskInternal(GetTask(handle));
+        GCHandle.FromIntPtr(handle).Free();
+    }
+    static void CancelTaskInternal(HostTask? task)
+    {
+        if (task is null) return;
+        task.Active = false;
+        task.Owner.Tasks.Remove(task);
     }
 }
