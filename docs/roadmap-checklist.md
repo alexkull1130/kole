@@ -7,7 +7,7 @@ This checklist ties the product direction to working artifacts. A checked item h
 - [x] **Native binding generator:** `scripts/generate-bindings.mjs` generates Kole declarations and C shims from a host manifest with lifecycle-aware classes.
 - [x] **Safe callbacks and event subscriptions:** C host subscriptions are bound to a lifecycle domain; closing the domain cancels them and blocks future event delivery.
 - [x] **Structured concurrency:** host tasks are children of a lifecycle domain, driven through `kole_domain_poll`, and cancelled when the domain closes.
-- [ ] **Hot reload lifecycle policy:** reload will preserve a domain only when its schema is compatible; otherwise it will close and replace it deterministically.
+- [x] **Hot reload lifecycle policy:** `kole_domain_replace` deliberately closes and replaces a domain; callbacks and tasks never cross the reload boundary.
 - [ ] **VS Code ownership diagnostics:** add code actions and diagnostics for escaping owned values, missing `override`, and callbacks that outlive owners.
 - [x] **Flagship native-host demonstration (initial):** `examples/LifecycleDomain.k` demonstrates deterministic reverse cleanup and is covered by the lifecycle conformance test.
 - [ ] **CLI libraries:** build the first standard library around file/process/network resources and use it as the resource-handling proof case.

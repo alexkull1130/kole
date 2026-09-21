@@ -43,6 +43,7 @@ public static unsafe class Embedding
     static Domain? GetDomain(IntPtr handle) => handle == IntPtr.Zero ? null : GCHandle.FromIntPtr(handle).Target as Domain;
     static Subscription? GetSubscription(IntPtr handle) => handle == IntPtr.Zero ? null : GCHandle.FromIntPtr(handle).Target as Subscription;
     static HostTask? GetTask(IntPtr handle) => handle == IntPtr.Zero ? null : GCHandle.FromIntPtr(handle).Target as HostTask;
+    static IntPtr NewDomain() => GCHandle.ToIntPtr(GCHandle.Alloc(new Domain()));
     static void Close(Domain? domain)
     {
         if (domain is null || !domain.Open) return;
@@ -103,7 +104,17 @@ public static unsafe class Embedding
 
     // A domain owns its subscriptions. Closing it is idempotent and prevents every later callback.
     [UnmanagedCallersOnly(EntryPoint = "kole_domain_create")]
-    public static IntPtr CreateDomain() => GCHandle.ToIntPtr(GCHandle.Alloc(new Domain()));
+    public static IntPtr CreateDomain() => NewDomain();
+
+    // Reload replacement is explicit: the old domain is closed before a fresh one is returned.
+    // Hosts may migrate compatible state themselves before destroying the old handle.
+    [UnmanagedCallersOnly(EntryPoint = "kole_domain_replace")]
+    public static IntPtr ReplaceDomain(IntPtr handle)
+    {
+        if (GetDomain(handle) is null) return IntPtr.Zero;
+        Close(GetDomain(handle));
+        return NewDomain();
+    }
 
     [UnmanagedCallersOnly(EntryPoint = "kole_domain_close")]
     public static void CloseDomain(IntPtr handle)

@@ -14,6 +14,8 @@ const char* kole_runtime_last_error(void* runtime);
 /* Owner-bound callbacks. Closing or destroying the domain cancels all subscriptions. */
 typedef void (*kole_callback)(void* context, void* payload);
 void* kole_domain_create(void);
+/* Closes the old domain and returns a fresh replacement domain. */
+void* kole_domain_replace(void* domain);
 void kole_domain_close(void* domain);
 void kole_domain_destroy(void* domain);
 void* kole_domain_subscribe(void* domain, kole_callback callback, void* context);
