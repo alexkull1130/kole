@@ -10,6 +10,8 @@ Version 0.11 adds Map and Set collections, collection loops, switch expressions,
 
 This folder contains the first working kole interpreter. kole has its own lexer, parser, object model, and execution engine. It does not depend on Java, the JVM, or Java libraries, and does not translate programs into Java or JavaScript.
 
+Kole's product direction is lifecycle-safe scripting for native applications. The first lifecycle-domain contract and host integration rules are documented in [lifecycle domains](docs/lifecycle-domains.md).
+
 Run the standalone Windows `kole.exe` without installing Node.js, Java, or .NET. The native interpreter is implemented in C# and compiled with Native AOT. A JavaScript reference implementation remains for development and tests. See [native builds](docs/native.md) and [VS Code support](docs/editor.md).
 
 ## Run kole
