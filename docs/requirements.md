@@ -1,6 +1,6 @@
 # kole requirements
 
-This is the working record of the language direction agreed with Alex Kull. Features marked planned are requirements for the language's evolution, not implemented guarantees.
+This is the working record of the language direction agreed with Alex Kull. Features marked planned are requirements for the language's evolution, not implemented guarantees. Kole's product identity is documented in [Kole's purpose](positioning.md): lifecycle-safe scripting for native applications.
 
 ## Identity and implementation
 

@@ -2,7 +2,7 @@
 
 <img src="assets/kole-logo.png" alt="Kole: a piece of coal drawn in crayon" width="220">
 
-kole is a Java-inspired, object-oriented programming language. Its working direction is Java+: familiar classes, interfaces, encapsulation, static typing, generics, and exceptions, extended with explicit object relationships, enforced lifecycles, and built-in contracts.
+kole is an object-oriented scripting language for native applications, developer tools, and game engines. It models ownership and object lifecycles directly, so scripts can work with host resources without silently retaining dead objects or leaving cleanup to convention. Its working direction is Java+: familiar classes, interfaces, encapsulation, static typing, generics, and exceptions, extended with explicit object relationships, enforced lifecycles, and built-in contracts. Read the full [purpose and product direction](docs/positioning.md).
 
 The agreed syntax, full feature roadmap, optional memory management, and Alex Kull Easter egg are recorded in [requirements](docs/requirements.md).
 
