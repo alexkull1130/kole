@@ -4,7 +4,7 @@ This checklist ties the product direction to working artifacts. A checked item h
 
 - [x] **Ownership semantics:** `owns`, `belongsTo`, `Closeable`, `using`, non-null initialization, and reverse cleanup are defined in [lifecycle-domains.md](lifecycle-domains.md) and exercised by `test/lifecycle-domain.test.mjs`.
 - [x] **Stable C embedding API (first slice):** `include/kole.h` defines a C ABI for creating, loading/checking, running, reading errors, and destroying a runtime. Exports are implemented in `native/Embedding.cs`.
-- [ ] **Native binding generator:** generate Kole declarations and C shims from a host manifest with ownership and callback annotations.
+- [x] **Native binding generator:** `scripts/generate-bindings.mjs` generates Kole declarations and C shims from a host manifest with lifecycle-aware classes.
 - [ ] **Safe callbacks and event subscriptions:** callback registrations will carry an owner handle and reject invocation after close.
 - [ ] **Structured concurrency:** background tasks will be children of a lifecycle domain and joined or cancelled during close.
 - [ ] **Hot reload lifecycle policy:** reload will preserve a domain only when its schema is compatible; otherwise it will close and replace it deterministically.
