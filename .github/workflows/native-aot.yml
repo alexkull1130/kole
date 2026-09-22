@@ -30,7 +30,9 @@ jobs:
         shell: pwsh
         run: |
           $publish = 'native/bin/Release/net10.0/win-x64/publish'
-          cl /nologo /I include examples/native-host/host.c /link /LIBPATH:$publish /OUT:native-host.exe kole_embedding.lib
+          $library = Get-ChildItem native -Recurse -Filter '*.lib' | Where-Object { $_.Name -match 'kole_embedding' } | Select-Object -First 1
+          if ($null -eq $library) { throw 'NativeAOT did not produce a Kole embedding import library.' }
+          cl /nologo /I include examples/native-host/host.c /link /OUT:native-host.exe $library.FullName
       - name: Run the native host integration test
         shell: pwsh
         run: |
