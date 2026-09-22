@@ -1,0 +1,21 @@
+{
+  "classes": [
+    {
+      "name": "HostProject",
+      "fields": [
+        { "name": "watcher", "type": "FileWatcher?", "relationship": "owns" }
+      ]
+    },
+    {
+      "name": "FileWatcher",
+      "closeable": true,
+      "methods": [
+        { "name": "close", "returns": "void" },
+        { "name": "path", "returns": "string" }
+      ],
+      "events": [
+        { "name": "changed" }
+      ]
+    }
+  ]
+}

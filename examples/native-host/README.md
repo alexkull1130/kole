@@ -32,3 +32,5 @@ Use `kole_runtime_run_with_args` when the entry class declares `main(args: strin
 When `kole_runtime_load` or `kole_runtime_run` returns zero, read both `kole_runtime_last_error_code` and `kole_runtime_last_error`. Program errors are safe script failures; internal errors should be reported to the host's diagnostics. The example shows that error path before it creates the lifecycle domain.
 
 The host also registers two native close actions. They run exactly once in reverse registration order, after the domain has stopped callbacks and tasks.
+
+For a concrete binding description of a closeable, event-driven host resource, see [the file watcher manifest](bindings.md).
