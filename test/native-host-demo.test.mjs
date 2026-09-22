@@ -11,6 +11,8 @@ test("native host demonstration uses the published C boundary", () => {
   assert.match(host, /kole_domain_close/);
   assert.match(host, /kole_runtime_load/);
   assert.match(host, /kole_runtime_set_output/);
+  assert.match(host, /kole_domain_on_close/);
+  assert.match(host, /kole_close_action_destroy/);
   assert.match(host, /Kole error %d/);
   assert.match(host, /callbacks == 1/);
 });

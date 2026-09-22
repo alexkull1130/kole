@@ -37,6 +37,12 @@ void kole_subscription_cancel(void* subscription);
 void kole_subscription_destroy(void* subscription);
 void kole_domain_publish(void* domain, void* payload);
 
+/* Resource finalizers run once, in reverse registration order, when the domain closes. */
+typedef void (*kole_close_action)(void* context);
+void* kole_domain_on_close(void* domain, kole_close_action callback, void* context);
+void kole_close_action_cancel(void* action);
+void kole_close_action_destroy(void* action);
+
 /* Structured host tasks. Work is polled by the owner and returns nonzero when complete. */
 typedef int (*kole_task_work)(void* context);
 void* kole_domain_start_task(void* domain, kole_task_work work, void* context);

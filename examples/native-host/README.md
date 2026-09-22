@@ -14,6 +14,8 @@ Then compile `host.c` with your C compiler, including `include/kole.h` and linki
 
 ```text
 script: Kole is hosted: native-host
+closed: second
+closed: first
 callbacks: 1
 ```
 
@@ -26,3 +28,5 @@ For script output, pass a `kole_output` callback to `kole_runtime_set_output`. K
 Use `kole_runtime_run_with_args` when the entry class declares `main(args: string[])`. The host demo passes its own `native-host` argument into the script.
 
 When `kole_runtime_load` or `kole_runtime_run` returns zero, read both `kole_runtime_last_error_code` and `kole_runtime_last_error`. Program errors are safe script failures; internal errors should be reported to the host's diagnostics. The example shows that error path before it creates the lifecycle domain.
+
+The host also registers two native close actions. They run exactly once in reverse registration order, after the domain has stopped callbacks and tasks.
