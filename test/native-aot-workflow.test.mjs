@@ -10,5 +10,6 @@ test("Windows CI publishes and runs the NativeAOT C host", () => {
   assert.match(workflow, /cl \/nologo \/I include examples\/native-host\/host\.c/);
   assert.match(workflow, /Get-ChildItem native -Recurse -Filter 'kole_embedding\.dll'/);
   assert.match(workflow, /native-host-report\.txt/);
+  assert.match(workflow, /\$PSNativeCommandUseErrorActionPreference = \$false/);
   assert.match(workflow, /\.\/native-host\.exe/);
 });
