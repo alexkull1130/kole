@@ -118,10 +118,22 @@ public static unsafe class Embedding
 
     [UnmanagedCallersOnly(EntryPoint = "kole_runtime_run")]
     public static int Run(IntPtr handle, byte* entry)
+        => RunProgram(Get(handle), Marshal.PtrToStringUTF8((IntPtr)entry) ?? "", []);
+
+    [UnmanagedCallersOnly(EntryPoint = "kole_runtime_run_with_args")]
+    public static int RunWithArgs(IntPtr handle, byte* entry, int argc, IntPtr* argv)
     {
         var session = Get(handle);
+        if (session is null || argc < 0 || argc > 4096) return 0;
+        var args = new string[argc];
+        for (var i = 0; i < argc; i++) args[i] = Marshal.PtrToStringUTF8(argv[i]) ?? "";
+        return RunProgram(session, Marshal.PtrToStringUTF8((IntPtr)entry) ?? "", args);
+    }
+
+    static int RunProgram(Session? session, string entry, string[] args)
+    {
         if (session?.Runtime is null) return 0;
-        try { session.Runtime.Run(Marshal.PtrToStringUTF8((IntPtr)entry) ?? "", []); session.SetError(""); return 1; }
+        try { session.Runtime.Run(entry, args); session.SetError(""); return 1; }
         catch (Fault error) { session.SetError(error.Message, 1); return 0; }
         catch (Exception error) { session.SetError(error.Message, 2); return 0; }
     }
