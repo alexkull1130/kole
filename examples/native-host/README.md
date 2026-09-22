@@ -10,6 +10,8 @@ dotnet publish native/Kole.Embedding.csproj -c Release -r win-x64
 
 NativeAOT publishing requires Visual Studio's **Desktop development with C++** workload (including the Windows SDK). The project itself can be compiled with `dotnet build` without that workload; the C++ linker is only needed to produce the distributable native library.
 
+The repository's Windows CI workflow publishes the library, compiles this host, and runs it against the resulting DLL.
+
 Then compile `host.c` with your C compiler, including `include/kole.h` and linking against the generated `kole_embedding.lib`. Running it prints:
 
 ```text
