@@ -2,10 +2,16 @@
 #include "../../include/kole.h"
 
 static int callbacks = 0;
+static int output_lines = 0;
 static void on_change(void* context, void* payload) {
     (void)context;
     (void)payload;
     callbacks++;
+}
+static void on_output(void* context, const char* text) {
+    (void)context;
+    output_lines++;
+    printf("script: %s\n", text);
 }
 
 int main(void) {
@@ -13,6 +19,18 @@ int main(void) {
         fprintf(stderr, "Incompatible Kole embedding API\n");
         return 2;
     }
+    const char* script =
+        "class HostDemo {"
+        " static main() -> void { Console.writeLine(\"Kole is hosted\"); }"
+        "}";
+    void* runtime = kole_runtime_create();
+    kole_runtime_set_output(runtime, on_output, NULL);
+    if (!kole_runtime_load(runtime, script, "HostDemo.k") || !kole_runtime_run(runtime, "HostDemo")) {
+        fprintf(stderr, "Kole error %d: %s\n", kole_runtime_last_error_code(runtime), kole_runtime_last_error(runtime));
+        kole_runtime_destroy(runtime);
+        return 3;
+    }
+    kole_runtime_destroy(runtime);
     void* domain = kole_domain_create();
     void* subscription = kole_domain_subscribe(domain, on_change, NULL);
     kole_domain_publish(domain, NULL);
@@ -21,5 +39,5 @@ int main(void) {
     kole_subscription_destroy(subscription);
     kole_domain_destroy(domain);
     printf("callbacks: %d\n", callbacks);
-    return callbacks == 1 ? 0 : 1;
+    return callbacks == 1 && output_lines == 1 ? 0 : 1;
 }

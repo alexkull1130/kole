@@ -9,5 +9,8 @@ test("native host demonstration uses the published C boundary", () => {
   assert.match(project, /<PublishAot>true<\/PublishAot>/);
   assert.match(host, /#include "\.\.\/\.\.\/include\/kole\.h"/);
   assert.match(host, /kole_domain_close/);
+  assert.match(host, /kole_runtime_load/);
+  assert.match(host, /kole_runtime_set_output/);
+  assert.match(host, /Kole error %d/);
   assert.match(host, /callbacks == 1/);
 });
