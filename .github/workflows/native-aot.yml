@@ -36,6 +36,7 @@ jobs:
       - name: Run the native host integration test
         shell: pwsh
         run: |
-          $publish = (Resolve-Path 'native/bin/Release/net10.0/win-x64/publish').Path
-          $env:PATH = "$publish;$env:PATH"
+          $dll = Get-ChildItem native -Recurse -Filter 'kole_embedding.dll' | Select-Object -First 1
+          if ($null -eq $dll) { throw 'NativeAOT did not produce a Kole embedding DLL.' }
+          $env:PATH = "$($dll.DirectoryName);$env:PATH"
           ./native-host.exe
