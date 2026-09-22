@@ -12,6 +12,7 @@ public static unsafe class Embedding
         public bool Open = true;
         public List<Subscription> Subscriptions = [];
         public List<HostTask> Tasks = [];
+        public List<CloseAction> CloseActions = [];
     }
     sealed class Subscription
     {
@@ -24,6 +25,13 @@ public static unsafe class Embedding
     {
         public required Domain Owner;
         public IntPtr Work;
+        public IntPtr Context;
+        public bool Active = true;
+    }
+    sealed class CloseAction
+    {
+        public required Domain Owner;
+        public IntPtr Callback;
         public IntPtr Context;
         public bool Active = true;
     }
@@ -48,6 +56,7 @@ public static unsafe class Embedding
     static Domain? GetDomain(IntPtr handle) => handle == IntPtr.Zero ? null : GCHandle.FromIntPtr(handle).Target as Domain;
     static Subscription? GetSubscription(IntPtr handle) => handle == IntPtr.Zero ? null : GCHandle.FromIntPtr(handle).Target as Subscription;
     static HostTask? GetTask(IntPtr handle) => handle == IntPtr.Zero ? null : GCHandle.FromIntPtr(handle).Target as HostTask;
+    static CloseAction? GetCloseAction(IntPtr handle) => handle == IntPtr.Zero ? null : GCHandle.FromIntPtr(handle).Target as CloseAction;
     static IntPtr NewDomain() => GCHandle.ToIntPtr(GCHandle.Alloc(new Domain()));
     static void Close(Domain? domain)
     {
@@ -57,6 +66,14 @@ public static unsafe class Embedding
         domain.Subscriptions.Clear();
         foreach (var task in domain.Tasks) task.Active = false;
         domain.Tasks.Clear();
+        for (var i = domain.CloseActions.Count - 1; i >= 0; i--)
+        {
+            var action = domain.CloseActions[i];
+            if (!action.Active) continue;
+            action.Active = false;
+            ((delegate* unmanaged<IntPtr, void>)action.Callback)(action.Context);
+        }
+        domain.CloseActions.Clear();
     }
     static void Cancel(Subscription? subscription)
     {
@@ -246,6 +263,40 @@ public static unsafe class Embedding
         if (task is null) return;
         task.Active = false;
         task.Owner.Tasks.Remove(task);
+    }
+
+    // Close actions are resource finalizers owned by the domain and execute in reverse registration order.
+    [UnmanagedCallersOnly(EntryPoint = "kole_domain_on_close")]
+    public static IntPtr OnClose(IntPtr handle, IntPtr callback, IntPtr context)
+    {
+        var domain = GetDomain(handle);
+        if (domain is null || !domain.Open || callback == IntPtr.Zero) return IntPtr.Zero;
+        var action = new CloseAction { Owner = domain, Callback = callback, Context = context };
+        domain.CloseActions.Add(action);
+        return GCHandle.ToIntPtr(GCHandle.Alloc(action));
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "kole_close_action_cancel")]
+    public static void CancelCloseAction(IntPtr handle)
+    {
+        var action = GetCloseAction(handle);
+        if (action is null) return;
+        action.Active = false;
+        action.Owner.CloseActions.Remove(action);
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "kole_close_action_destroy")]
+    public static void DestroyCloseAction(IntPtr handle)
+    {
+        if (handle == IntPtr.Zero) return;
+        CancelCloseActionInternal(GetCloseAction(handle));
+        GCHandle.FromIntPtr(handle).Free();
+    }
+    static void CancelCloseActionInternal(CloseAction? action)
+    {
+        if (action is null) return;
+        action.Active = false;
+        action.Owner.CloseActions.Remove(action);
     }
 
     static void ApplyOutput(Session session)

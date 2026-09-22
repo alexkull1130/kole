@@ -16,7 +16,7 @@ Any ordinary variable, parameter, or returned reference to an object is a borrow
 
 Kole objects are garbage-collected by their host runtime. Resources use deterministic cleanup through `Closeable` and `using`. A `using` block calls `close()` on every exit path. An owner that holds several closeable resources must make `close()` idempotent and close them in reverse acquisition order.
 
-At the native boundary, a lifecycle domain owns callbacks and poll-driven tasks. `kole_domain_close` first prevents later callback or task execution, then the host closes native resources associated with that domain. `kole_domain_replace` applies the same closure rule before returning a replacement domain.
+At the native boundary, a lifecycle domain owns callbacks, poll-driven tasks, and registered close actions. `kole_domain_close` first prevents later callback or task execution, then invokes close actions once in reverse registration order. Hosts register native resource cleanup with `kole_domain_on_close`. `kole_domain_replace` applies the same closure rule before returning a replacement domain.
 
 ## Captures
 
