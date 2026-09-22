@@ -4,7 +4,10 @@
 extern "C" {
 #endif
 
+#define KOLE_API_VERSION 1
+
 /* UTF-8 strings. Returned error text remains valid until the next API call or destroy. */
+int kole_api_version(void);
 void* kole_runtime_create(void);
 void kole_runtime_destroy(void* runtime);
 int kole_runtime_load(void* runtime, const char* source, const char* filename);
