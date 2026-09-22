@@ -29,14 +29,15 @@ jobs:
       - name: Compile the C host against the published ABI
         shell: pwsh
         run: |
-          $publish = 'native/bin/Release/net10.0/win-x64/publish'
-          $library = Get-ChildItem native -Recurse -Filter '*.lib' | Where-Object { $_.Name -match 'kole_embedding' } | Select-Object -First 1
+          $nativeOutput = 'native/bin/Release/net10.0/win-x64'
+          $library = Get-ChildItem $nativeOutput -Recurse -Filter '*.lib' | Where-Object { $_.Name -match 'kole_embedding' } | Select-Object -First 1
           if ($null -eq $library) { throw 'NativeAOT did not produce a Kole embedding import library.' }
           cl /nologo /I include examples/native-host/host.c /link /OUT:native-host.exe $library.FullName
       - name: Run the native host integration test
         shell: pwsh
         run: |
-          $dll = Get-ChildItem native -Recurse -Filter 'kole_embedding.dll' | Select-Object -First 1
+          $nativeOutput = 'native/bin/Release/net10.0/win-x64'
+          $dll = Get-ChildItem $nativeOutput -Recurse -Filter 'kole_embedding.dll' | Select-Object -First 1
           if ($null -eq $dll) { throw 'NativeAOT did not produce a Kole embedding DLL.' }
           $env:PATH = "$($dll.DirectoryName);$env:PATH"
           $PSNativeCommandUseErrorActionPreference = $false
