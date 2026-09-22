@@ -3,6 +3,12 @@
     {
       "name": "FileWatcher",
       "closeable": true,
+      "fields": [
+        { "name": "project", "type": "Project?", "relationship": "belongsTo" }
+      ],
+      "events": [
+        { "name": "changed" }
+      ],
       "methods": [
         { "name": "close", "returns": "void" },
         { "name": "path", "returns": "string" }
