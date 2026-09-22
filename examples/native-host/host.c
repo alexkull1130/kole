@@ -4,6 +4,14 @@
 static int callbacks = 0;
 static int output_lines = 0;
 static int cleaned = 0;
+static FILE* report;
+static int stop(int code) {
+    if (report != NULL) {
+        fprintf(report, "exit=%d output=%d callbacks=%d cleaned=%d\n", code, output_lines, callbacks, cleaned);
+        fclose(report);
+    }
+    return code;
+}
 static void on_change(void* context, void* payload) {
     (void)context;
     (void)payload;
@@ -20,9 +28,10 @@ static void on_close(void* context) {
 }
 
 int main(void) {
+    report = fopen("native-host-report.txt", "w");
     if (kole_api_version() != KOLE_API_VERSION) {
         fprintf(stderr, "Incompatible Kole embedding API\n");
-        return 2;
+        return stop(2);
     }
     const char* script =
         "class HostDemo {"
@@ -34,7 +43,7 @@ int main(void) {
     if (!kole_runtime_load(runtime, script, "HostDemo.k") || !kole_runtime_run_with_args(runtime, "HostDemo", 1, args)) {
         fprintf(stderr, "Kole error %d: %s\n", kole_runtime_last_error_code(runtime), kole_runtime_last_error(runtime));
         kole_runtime_destroy(runtime);
-        return 3;
+        return stop(3);
     }
     kole_runtime_destroy(runtime);
     void* domain = kole_domain_create();
@@ -51,15 +60,15 @@ int main(void) {
     printf("callbacks: %d\n", callbacks);
     if (output_lines != 1) {
         fprintf(stderr, "expected one script output line; got %d\n", output_lines);
-        return 10;
+        return stop(10);
     }
     if (callbacks != 1) {
         fprintf(stderr, "expected one event callback; got %d\n", callbacks);
-        return 11;
+        return stop(11);
     }
     if (cleaned != 2) {
         fprintf(stderr, "expected two close actions; got %d\n", cleaned);
-        return 12;
+        return stop(12);
     }
-    return 0;
+    return stop(0);
 }

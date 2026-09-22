@@ -40,3 +40,6 @@ jobs:
           if ($null -eq $dll) { throw 'NativeAOT did not produce a Kole embedding DLL.' }
           $env:PATH = "$($dll.DirectoryName);$env:PATH"
           ./native-host.exe
+          $code = $LASTEXITCODE
+          if (Test-Path native-host-report.txt) { Get-Content native-host-report.txt }
+          exit $code
