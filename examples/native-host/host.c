@@ -21,11 +21,12 @@ int main(void) {
     }
     const char* script =
         "class HostDemo {"
-        " static main() -> void { Console.writeLine(\"Kole is hosted\"); }"
+        " static main(args: string[]) -> void { Console.writeLine(\"Kole is hosted: \" + args[0]); }"
         "}";
+    const char* args[] = { "native-host" };
     void* runtime = kole_runtime_create();
     kole_runtime_set_output(runtime, on_output, NULL);
-    if (!kole_runtime_load(runtime, script, "HostDemo.k") || !kole_runtime_run(runtime, "HostDemo")) {
+    if (!kole_runtime_load(runtime, script, "HostDemo.k") || !kole_runtime_run_with_args(runtime, "HostDemo", 1, args)) {
         fprintf(stderr, "Kole error %d: %s\n", kole_runtime_last_error_code(runtime), kole_runtime_last_error(runtime));
         kole_runtime_destroy(runtime);
         return 3;

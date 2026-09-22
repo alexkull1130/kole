@@ -21,6 +21,7 @@ typedef void (*kole_output)(void* context, const char* text);
 void kole_runtime_set_output(void* runtime, kole_output callback, void* context);
 int kole_runtime_load(void* runtime, const char* source, const char* filename);
 int kole_runtime_run(void* runtime, const char* entry_class);
+int kole_runtime_run_with_args(void* runtime, const char* entry_class, int argc, const char* const* argv);
 const char* kole_runtime_last_error(void* runtime);
 int kole_runtime_last_error_code(void* runtime);
 
