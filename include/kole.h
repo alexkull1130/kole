@@ -10,6 +10,9 @@ extern "C" {
 int kole_api_version(void);
 void* kole_runtime_create(void);
 void kole_runtime_destroy(void* runtime);
+/* Receives UTF-8 lines while a loaded script runs. Pass NULL to use process stdout. */
+typedef void (*kole_output)(void* context, const char* text);
+void kole_runtime_set_output(void* runtime, kole_output callback, void* context);
 int kole_runtime_load(void* runtime, const char* source, const char* filename);
 int kole_runtime_run(void* runtime, const char* entry_class);
 const char* kole_runtime_last_error(void* runtime);
