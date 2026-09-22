@@ -9,6 +9,10 @@ static void on_change(void* context, void* payload) {
 }
 
 int main(void) {
+    if (kole_api_version() != KOLE_API_VERSION) {
+        fprintf(stderr, "Incompatible Kole embedding API\n");
+        return 2;
+    }
     void* domain = kole_domain_create();
     void* subscription = kole_domain_subscribe(domain, on_change, NULL);
     kole_domain_publish(domain, NULL);

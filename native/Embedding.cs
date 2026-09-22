@@ -6,6 +6,7 @@ namespace Kole;
 /// Stable host boundary. The exported functions intentionally use only C ABI types.
 public static unsafe class Embedding
 {
+    const int ApiVersion = 1;
     sealed class Domain
     {
         public bool Open = true;
@@ -62,6 +63,9 @@ public static unsafe class Embedding
 
     [UnmanagedCallersOnly(EntryPoint = "kole_runtime_create")]
     public static IntPtr Create() => GCHandle.ToIntPtr(GCHandle.Alloc(new Session()));
+
+    [UnmanagedCallersOnly(EntryPoint = "kole_api_version")]
+    public static int Version() => ApiVersion;
 
     [UnmanagedCallersOnly(EntryPoint = "kole_runtime_destroy")]
     public static void Destroy(IntPtr handle)
