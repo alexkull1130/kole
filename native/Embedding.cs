@@ -32,6 +32,8 @@ public static unsafe class Embedding
         public Runtime? Runtime;
         public string Error = "";
         public IntPtr ErrorPtr;
+        public IntPtr Output;
+        public IntPtr OutputContext;
         public void SetError(string value)
         {
             Error = value;
@@ -90,11 +92,22 @@ public static unsafe class Embedding
             var name = Marshal.PtrToStringUTF8((IntPtr)file) ?? "<embedded>";
             var classes = Parser.Parse(text, name).Classes;
             session.Runtime = new Runtime(Types.Specialize(Standard.With(classes)));
+            ApplyOutput(session);
             new Checker(session.Runtime).Check();
             session.SetError("");
             return 1;
         }
         catch (Exception error) { session.SetError(error.Message); session.Runtime = null; return 0; }
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "kole_runtime_set_output")]
+    public static void SetOutput(IntPtr handle, IntPtr callback, IntPtr context)
+    {
+        var session = Get(handle);
+        if (session is null) return;
+        session.Output = callback;
+        session.OutputContext = context;
+        ApplyOutput(session);
     }
 
     [UnmanagedCallersOnly(EntryPoint = "kole_runtime_run")]
@@ -214,5 +227,17 @@ public static unsafe class Embedding
         if (task is null) return;
         task.Active = false;
         task.Owner.Tasks.Remove(task);
+    }
+
+    static void ApplyOutput(Session session)
+    {
+        if (session.Runtime is null) return;
+        if (session.Output == IntPtr.Zero) { session.Runtime.Print = Console.WriteLine; return; }
+        session.Runtime.Print = text =>
+        {
+            var utf8 = Marshal.StringToCoTaskMemUTF8(text);
+            try { ((delegate* unmanaged<IntPtr, IntPtr, void>)session.Output)(session.OutputContext, utf8); }
+            finally { Marshal.FreeCoTaskMem(utf8); }
+        };
     }
 }
