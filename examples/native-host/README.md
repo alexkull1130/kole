@@ -21,3 +21,5 @@ The public boundary is [include/kole.h](../../include/kole.h). Host programs sho
 Before using other functions, a host compares `kole_api_version()` with `KOLE_API_VERSION`. A mismatch means the host should stop rather than make assumptions about ABI compatibility.
 
 For script output, pass a `kole_output` callback to `kole_runtime_set_output`. Kole sends each output line to that callback as UTF-8, letting an editor, game console, or application log own the presentation.
+
+When `kole_runtime_load` or `kole_runtime_run` returns zero, read both `kole_runtime_last_error_code` and `kole_runtime_last_error`. Program errors are safe script failures; internal errors should be reported to the host's diagnostics.
