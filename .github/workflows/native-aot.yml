@@ -26,13 +26,10 @@ jobs:
       - uses: ilammy/msvc-dev-cmd@v1
       - name: Publish the Kole embedding library
         run: dotnet publish native/Kole.Embedding.csproj -c Release -r win-x64 -o native-artifacts
-      - name: Compile the C host against the published ABI
+      - name: Compile the dynamically loaded C host
         shell: pwsh
         run: |
-          $nativeOutput = 'native-artifacts'
-          $library = Get-ChildItem $nativeOutput -Recurse -Filter '*.lib' | Where-Object { $_.Name -match 'kole_embedding' } | Select-Object -First 1
-          if ($null -eq $library) { throw 'NativeAOT did not produce a Kole embedding import library.' }
-          cl /nologo /I include examples/native-host/host.c /link /OUT:native-host.exe $library.FullName
+          cl /nologo /I include examples/native-host/host.c /link /OUT:native-host.exe
       - name: Run the native host integration test
         shell: pwsh
         run: |

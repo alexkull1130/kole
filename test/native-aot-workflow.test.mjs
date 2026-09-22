@@ -7,7 +7,6 @@ test("Windows CI publishes and runs the NativeAOT C host", () => {
   assert.match(workflow, /runs-on: windows-latest/);
   assert.match(workflow, /dotnet publish native\/Kole\.Embedding\.csproj -c Release -r win-x64 -o native-artifacts/);
   assert.match(workflow, /\$nativeOutput = 'native-artifacts'/);
-  assert.match(workflow, /Get-ChildItem \$nativeOutput -Recurse -Filter '\*\.lib'/);
   assert.match(workflow, /cl \/nologo \/I include examples\/native-host\/host\.c/);
   assert.match(workflow, /Get-ChildItem \$nativeOutput -Recurse -Filter 'kole_embedding\.dll'/);
   assert.match(workflow, /native-host-report\.txt/);

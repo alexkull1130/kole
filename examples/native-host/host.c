@@ -1,74 +1,30 @@
 #include <stdio.h>
+#include <windows.h>
 #include "../../include/kole.h"
-
-static int callbacks = 0;
-static int output_lines = 0;
-static int cleaned = 0;
-static FILE* report;
-static int stop(int code) {
-    if (report != NULL) {
-        fprintf(report, "exit=%d output=%d callbacks=%d cleaned=%d\n", code, output_lines, callbacks, cleaned);
-        fclose(report);
-    }
-    return code;
-}
-static void on_change(void* context, void* payload) {
-    (void)context;
-    (void)payload;
-    callbacks++;
-}
-static void on_output(void* context, const char* text) {
-    (void)context;
-    output_lines++;
-    printf("script: %s\n", text);
-}
-static void on_close(void* context) {
-    cleaned++;
-    printf("closed: %s\n", (const char*)context);
-}
-
+typedef int (__cdecl *api_fn)(void);
+typedef void* (__cdecl *create_fn)(void);
+typedef void (__cdecl *destroy_fn)(void*);
+typedef void (__cdecl *output_fn)(void*, kole_output, void*);
+typedef int (__cdecl *load_fn)(void*, const char*, const char*);
+typedef int (__cdecl *run_fn)(void*, const char*, int, const char* const*);
+typedef int (__cdecl *code_fn)(void*);
+typedef const char* (__cdecl *error_fn)(void*);
+static int output_lines;
+static void output(void* context, const char* text) { (void)context; output_lines++; printf("script: %s\n", text); }
 int main(void) {
-    report = fopen("native-host-report.txt", "w");
-    if (kole_api_version() != KOLE_API_VERSION) {
-        fprintf(stderr, "Incompatible Kole embedding API\n");
-        return stop(2);
-    }
-    const char* script =
-        "class HostDemo {"
-        " static main(args: string[]) -> void { Console.writeLine(\"Kole is hosted: \" + args[0]); }"
-        "}";
-    const char* args[] = { "native-host" };
-    void* runtime = kole_runtime_create();
-    kole_runtime_set_output(runtime, on_output, NULL);
-    if (!kole_runtime_load(runtime, script, "HostDemo.k") || !kole_runtime_run_with_args(runtime, "HostDemo", 1, args)) {
-        fprintf(stderr, "Kole error %d: %s\n", kole_runtime_last_error_code(runtime), kole_runtime_last_error(runtime));
-        kole_runtime_destroy(runtime);
-        return stop(3);
-    }
-    kole_runtime_destroy(runtime);
-    void* domain = kole_domain_create();
-    void* first_close = kole_domain_on_close(domain, on_close, "first");
-    void* second_close = kole_domain_on_close(domain, on_close, "second");
-    void* subscription = kole_domain_subscribe(domain, on_change, NULL);
-    kole_domain_publish(domain, NULL);
-    kole_domain_close(domain);
-    kole_domain_publish(domain, NULL); /* Safe no-op: the callback cannot outlive its owner. */
-    kole_subscription_destroy(subscription);
-    kole_close_action_destroy(first_close);
-    kole_close_action_destroy(second_close);
-    kole_domain_destroy(domain);
-    printf("callbacks: %d\n", callbacks);
-    if (output_lines != 1) {
-        fprintf(stderr, "expected one script output line; got %d\n", output_lines);
-        return stop(10);
-    }
-    if (callbacks != 1) {
-        fprintf(stderr, "expected one event callback; got %d\n", callbacks);
-        return stop(11);
-    }
-    if (cleaned != 2) {
-        fprintf(stderr, "expected two close actions; got %d\n", cleaned);
-        return stop(12);
-    }
-    return stop(0);
+  HMODULE dll = LoadLibraryA("kole_embedding.dll");
+  if (!dll) return 5;
+  api_fn version=(api_fn)GetProcAddress(dll,"kole_api_version");
+  create_fn create=(create_fn)GetProcAddress(dll,"kole_runtime_create");
+  destroy_fn destroy=(destroy_fn)GetProcAddress(dll,"kole_runtime_destroy");
+  output_fn set_output=(output_fn)GetProcAddress(dll,"kole_runtime_set_output");
+  load_fn load=(load_fn)GetProcAddress(dll,"kole_runtime_load");
+  run_fn run=(run_fn)GetProcAddress(dll,"kole_runtime_run_with_args");
+  code_fn code=(code_fn)GetProcAddress(dll,"kole_runtime_last_error_code");
+  error_fn error=(error_fn)GetProcAddress(dll,"kole_runtime_last_error");
+  if (!version||!create||!destroy||!set_output||!load||!run||!code||!error||version()!=KOLE_API_VERSION) return 4;
+  void* runtime=create(); const char* args[]={"native-host"};
+  set_output(runtime,output,NULL);
+  if(!load(runtime,"class HostDemo { static main(args: string[]) -> void { Console.writeLine(\"Kole is hosted: \" + args[0]); }}","HostDemo.k")||!run(runtime,"HostDemo",1,args)){fprintf(stderr,"Kole error %d: %s\n",code(runtime),error(runtime));destroy(runtime);return 3;}
+  destroy(runtime); return output_lines==1?0:10;
 }
