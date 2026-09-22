@@ -1,0 +1,39 @@
+name: NativeAOT host integration
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'native/**'
+      - 'include/**'
+      - 'examples/native-host/**'
+      - '.github/workflows/native-aot.yml'
+  pull_request:
+    paths:
+      - 'native/**'
+      - 'include/**'
+      - 'examples/native-host/**'
+      - '.github/workflows/native-aot.yml'
+
+jobs:
+  native-host:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: ilammy/msvc-dev-cmd@v1
+      - name: Publish the Kole embedding library
+        run: dotnet publish native/Kole.Embedding.csproj -c Release -r win-x64
+      - name: Compile the C host against the published ABI
+        shell: pwsh
+        run: |
+          $publish = 'native/bin/Release/net10.0/win-x64/publish'
+          cl /nologo /I include examples/native-host/host.c /link /LIBPATH:$publish /OUT:native-host.exe kole_embedding.lib
+      - name: Run the native host integration test
+        shell: pwsh
+        run: |
+          $publish = (Resolve-Path 'native/bin/Release/net10.0/win-x64/publish').Path
+          $env:PATH = "$publish;$env:PATH"
+          ./native-host.exe
