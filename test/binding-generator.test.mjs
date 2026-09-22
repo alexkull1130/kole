@@ -12,5 +12,8 @@ test("binding generator emits lifecycle-aware Kole and C declarations", () => {
   const header = fs.readFileSync(path.join(out, "bindings.h"), "utf8");
   assert.match(kole, /native class FileWatcher implements Closeable/);
   assert.match(kole, /native close\(\) -> void/);
+  assert.match(kole, /belongsTo project: Project\?;/);
+  assert.match(kole, /changed is owner-bound/);
   assert.match(header, /kole_filewatcher_close/);
+  assert.match(header, /kole_filewatcher_subscribe_changed/);
 });
