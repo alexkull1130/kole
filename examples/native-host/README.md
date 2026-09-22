@@ -1,6 +1,6 @@
 # Native host demonstration
 
-This example is a small C host for Kole's lifecycle API. It creates a domain, subscribes a callback, publishes one event, closes the domain, then publishes again. The second publish is a safe no-op because close cancels every domain-owned subscription.
+This example is a small C host for Kole's lifecycle API. It loads and runs a Kole entry class, receives the script's output through a host callback, then creates a domain, subscribes a callback, publishes one event, closes the domain, and publishes again. The second publish is a safe no-op because close cancels every domain-owned subscription.
 
 Build the native shared library on Windows:
 
@@ -13,6 +13,7 @@ NativeAOT publishing requires Visual Studio's **Desktop development with C++** w
 Then compile `host.c` with your C compiler, including `include/kole.h` and linking against the generated `kole_embedding.lib`. Running it prints:
 
 ```text
+script: Kole is hosted
 callbacks: 1
 ```
 
@@ -22,4 +23,4 @@ Before using other functions, a host compares `kole_api_version()` with `KOLE_AP
 
 For script output, pass a `kole_output` callback to `kole_runtime_set_output`. Kole sends each output line to that callback as UTF-8, letting an editor, game console, or application log own the presentation.
 
-When `kole_runtime_load` or `kole_runtime_run` returns zero, read both `kole_runtime_last_error_code` and `kole_runtime_last_error`. Program errors are safe script failures; internal errors should be reported to the host's diagnostics.
+When `kole_runtime_load` or `kole_runtime_run` returns zero, read both `kole_runtime_last_error_code` and `kole_runtime_last_error`. Program errors are safe script failures; internal errors should be reported to the host's diagnostics. The example shows that error path before it creates the lifecycle domain.
