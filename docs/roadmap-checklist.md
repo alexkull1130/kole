@@ -9,7 +9,7 @@ This checklist ties the product direction to working artifacts. A checked item h
 - [x] **Structured concurrency:** host tasks are children of a lifecycle domain, driven through `kole_domain_poll`, and cancelled when the domain closes.
 - [x] **Hot reload lifecycle policy:** `kole_domain_replace` deliberately closes and replaces a domain; callbacks and tasks never cross the reload boundary.
 - [x] **VS Code ownership diagnostics:** relationship failures include editor hints for nullable back-references, matching owners, ambiguity, cycles, and safe ownership updates.
-- [x] **Flagship native-host demonstration (initial):** `examples/LifecycleDomain.k` demonstrates deterministic reverse cleanup and is covered by the lifecycle conformance test.
+- [x] **Flagship native-host demonstration:** `examples/native-host` is a C host that builds against the NativeAOT shared library and proves callbacks stop when a lifecycle domain closes.
 - [x] **CLI libraries:** `Console`, `File`, and `TextFile` provide the first resource-safe CLI library; `LineCount.k` proves deterministic streaming cleanup with `using`.
 - [x] **Teaching adoption:** the first lifecycle lesson, five classroom-sized exercises, and a runnable owned-resource example are published under `docs/teaching`.
 
