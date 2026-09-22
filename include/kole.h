@@ -8,6 +8,12 @@ extern "C" {
 
 /* UTF-8 strings. Returned error text remains valid until the next API call or destroy. */
 int kole_api_version(void);
+typedef enum kole_error_code {
+    KOLE_ERROR_NONE = 0,
+    KOLE_ERROR_PROGRAM = 1,
+    KOLE_ERROR_INTERNAL = 2,
+    KOLE_ERROR_INVALID_HANDLE = 3
+} kole_error_code;
 void* kole_runtime_create(void);
 void kole_runtime_destroy(void* runtime);
 /* Receives UTF-8 lines while a loaded script runs. Pass NULL to use process stdout. */
@@ -16,6 +22,7 @@ void kole_runtime_set_output(void* runtime, kole_output callback, void* context)
 int kole_runtime_load(void* runtime, const char* source, const char* filename);
 int kole_runtime_run(void* runtime, const char* entry_class);
 const char* kole_runtime_last_error(void* runtime);
+int kole_runtime_last_error_code(void* runtime);
 
 /* Owner-bound callbacks. Closing or destroying the domain cancels all subscriptions. */
 typedef void (*kole_callback)(void* context, void* payload);

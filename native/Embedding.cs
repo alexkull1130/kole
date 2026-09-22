@@ -32,11 +32,13 @@ public static unsafe class Embedding
         public Runtime? Runtime;
         public string Error = "";
         public IntPtr ErrorPtr;
+        public int ErrorCode;
         public IntPtr Output;
         public IntPtr OutputContext;
-        public void SetError(string value)
+        public void SetError(string value, int code = 0)
         {
             Error = value;
+            ErrorCode = code;
             if (ErrorPtr != IntPtr.Zero) Marshal.FreeCoTaskMem(ErrorPtr);
             ErrorPtr = Marshal.StringToCoTaskMemUTF8(value);
         }
@@ -81,6 +83,9 @@ public static unsafe class Embedding
     [UnmanagedCallersOnly(EntryPoint = "kole_runtime_last_error")]
     public static IntPtr LastError(IntPtr handle) => Get(handle)?.ErrorPtr ?? IntPtr.Zero;
 
+    [UnmanagedCallersOnly(EntryPoint = "kole_runtime_last_error_code")]
+    public static int LastErrorCode(IntPtr handle) => Get(handle)?.ErrorCode ?? 3;
+
     [UnmanagedCallersOnly(EntryPoint = "kole_runtime_load")]
     public static int Load(IntPtr handle, byte* source, byte* file)
     {
@@ -97,7 +102,8 @@ public static unsafe class Embedding
             session.SetError("");
             return 1;
         }
-        catch (Exception error) { session.SetError(error.Message); session.Runtime = null; return 0; }
+        catch (Fault error) { session.SetError(error.Message, 1); session.Runtime = null; return 0; }
+        catch (Exception error) { session.SetError(error.Message, 2); session.Runtime = null; return 0; }
     }
 
     [UnmanagedCallersOnly(EntryPoint = "kole_runtime_set_output")]
@@ -116,7 +122,8 @@ public static unsafe class Embedding
         var session = Get(handle);
         if (session?.Runtime is null) return 0;
         try { session.Runtime.Run(Marshal.PtrToStringUTF8((IntPtr)entry) ?? "", []); session.SetError(""); return 1; }
-        catch (Exception error) { session.SetError(error.Message); return 0; }
+        catch (Fault error) { session.SetError(error.Message, 1); return 0; }
+        catch (Exception error) { session.SetError(error.Message, 2); return 0; }
     }
 
     // A domain owns its subscriptions. Closing it is idempotent and prevents every later callback.
