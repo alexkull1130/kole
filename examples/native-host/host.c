@@ -49,5 +49,17 @@ int main(void) {
     kole_close_action_destroy(second_close);
     kole_domain_destroy(domain);
     printf("callbacks: %d\n", callbacks);
-    return callbacks == 1 && output_lines == 1 && cleaned == 2 ? 0 : 1;
+    if (output_lines != 1) {
+        fprintf(stderr, "expected one script output line; got %d\n", output_lines);
+        return 10;
+    }
+    if (callbacks != 1) {
+        fprintf(stderr, "expected one event callback; got %d\n", callbacks);
+        return 11;
+    }
+    if (cleaned != 2) {
+        fprintf(stderr, "expected two close actions; got %d\n", cleaned);
+        return 12;
+    }
+    return 0;
 }
