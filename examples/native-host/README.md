@@ -1,6 +1,10 @@
 # Native host demonstration
 
-This example is a small C host for Kole's embedding API. It loads and runs a Kole entry class and receives the script's output through a host callback.
+This example is a small C host for Kole's embedding API. It loads
+[HostDemo.k](HostDemo.k), runs its entry point, and receives output through a
+host callback. A native, polled `FileWatcher` reads a local file and publishes
+content changes through a lifecycle domain. Each event calls the script's
+public static `onChanged(path: string) -> void` handler.
 
 Build the native shared library on Windows:
 
@@ -12,10 +16,14 @@ NativeAOT publishing requires Visual Studio's **Desktop development with C++** w
 
 The repository's Windows CI workflow publishes the library, compiles this host, and runs it against the resulting DLL.
 
-Then compile `host.c` with your C compiler, including `include/kole.h`. The host loads `kole_embedding.dll` at runtime, so no import library is needed. Running it prints:
+Then compile `host.c` with your C compiler, including `include/kole.h`.
+The host loads `kole_embedding.dll` at runtime, so no import library is
+needed. Run `native-host.exe` from the repository root. It prints:
 
 ```text
 script: Kole is hosted: native-host
+script: changed: native-host-watch.txt
+script: changed: native-host-watch.txt
 ```
 
 The public boundary is [include/kole.h](../../include/kole.h). Host programs should create a domain for each script-owned resource graph and close or replace it when that graph ends or reloads.
@@ -28,6 +36,21 @@ Use `kole_runtime_run_with_args` when the entry class declares `main(args: strin
 
 When `kole_runtime_load` or `kole_runtime_run` returns zero, read both `kole_runtime_last_error_code` and `kole_runtime_last_error`. Program errors are safe script failures; internal errors should be reported to the host's diagnostics. The example shows that error path before it creates the lifecycle domain.
 
-The lifecycle domain functions remain available through the same C API; see [the ownership contract](../../docs/ownership.md) for their cleanup rules.
+The host changes the file five times. Only the second and fourth contents
+trigger a Kole callback. Replacing the first domain closes its watcher and
+subscriptions; closing the replacement stops its watcher too. The host checks
+the exact output and exits nonzero if an event arrives after either closure.
+Content polling makes this test deterministic in CI; the example does not use
+OS file notifications. It removes its temporary file on exit.
 
-For a concrete binding description of a closeable, event-driven host resource, see [the file watcher manifest](bindings.md).
+`kole_runtime_call_string` is the version 2 bridge from a native event to
+Kole. It accepts a public static `void` method with exactly one `string`
+parameter. A missing or incompatible handler returns zero and sets
+`kole_runtime_last_error_code` to `KOLE_ERROR_PROGRAM`. The host owns the
+watcher and its domain; the script receives events. See
+[the ownership contract](../../docs/ownership.md) for cleanup rules.
+
+For a proposed script-facing class declaration generated from a manifest,
+see [the file watcher manifest](bindings.md). Generated declarations are not
+yet executable native class bindings; this sample demonstrates the working
+event callback boundary.
