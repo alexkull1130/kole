@@ -6,7 +6,7 @@ namespace Kole;
 /// Stable host boundary. The exported functions intentionally use only C ABI types.
 public static unsafe class Embedding
 {
-    const int ApiVersion = 2;
+    const int ApiVersion = 3;
     sealed class Domain
     {
         public bool Open = true;
@@ -43,6 +43,7 @@ public static unsafe class Embedding
         public int ErrorCode;
         public IntPtr Output;
         public IntPtr OutputContext;
+        public Dictionary<(string Class, string Method), (IntPtr Callback, IntPtr Context)> NativeMethods = [];
         public void SetError(string value, int code = 0)
         {
             Error = value;
@@ -110,11 +111,19 @@ public static unsafe class Embedding
         if (session is null) return 0;
         try
         {
+            session.NativeMethods.Clear();
             var text = Marshal.PtrToStringUTF8((IntPtr)source) ?? "";
             var name = Marshal.PtrToStringUTF8((IntPtr)file) ?? "<embedded>";
             var classes = Parser.Parse(text, name).Classes;
             // Runtime adds the standard library and specializes generics once.
             session.Runtime = new Runtime(classes);
+            session.Runtime.NativeStringVoid = (owner, method, value) =>
+            {
+                if (!session.NativeMethods.TryGetValue((owner, method), out var binding)) return false;
+                var utf8 = Marshal.StringToCoTaskMemUTF8(value);
+                try { return ((delegate* unmanaged<IntPtr, IntPtr, int>)binding.Callback)(binding.Context, utf8) != 0; }
+                finally { Marshal.FreeCoTaskMem(utf8); }
+            };
             ApplyOutput(session);
             new Checker(session.Runtime).Check();
             session.SetError("");
@@ -122,6 +131,26 @@ public static unsafe class Embedding
         }
         catch (Fault error) { session.SetError(error.Message, 1); session.Runtime = null; return 0; }
         catch (Exception error) { session.SetError(error.Message, 2); session.Runtime = null; return 0; }
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "kole_runtime_bind_string_void")]
+    public static int BindStringVoid(IntPtr handle, byte* className, byte* methodName, IntPtr callback, IntPtr context)
+    {
+        var session = Get(handle);
+        if (session?.Runtime is null || className is null || methodName is null || callback == IntPtr.Zero) return 0;
+        var name = Marshal.PtrToStringUTF8((IntPtr)className) ?? "";
+        var member = Marshal.PtrToStringUTF8((IntPtr)methodName) ?? "";
+        if (!session.Runtime.Classes.TryGetValue(name, out var cls) ||
+            !cls.OwnMethods.TryGetValue(member, out var method) ||
+            method.Native != "host" || !method.Static || method.Type != "void" ||
+            method.Params.Count != 1 || method.Params[0].Type != "string")
+        {
+            session.SetError($"No native static {name}.{member}(value: string) -> void declaration", 1);
+            return 0;
+        }
+        session.NativeMethods[(name, member)] = (callback, context);
+        session.SetError("");
+        return 1;
     }
 
     [UnmanagedCallersOnly(EntryPoint = "kole_runtime_set_output")]

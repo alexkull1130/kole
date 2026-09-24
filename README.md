@@ -13,7 +13,10 @@ This folder contains the first working kole interpreter. kole has its own lexer,
 Kole's product direction is lifecycle-safe scripting for native applications. The first lifecycle-domain contract and host integration rules are documented in [lifecycle domains](docs/lifecycle-domains.md). The implementation checklist is tracked in [roadmap-checklist](docs/roadmap-checklist.md).
 The [native FileWatcher host demo](examples/native-host/README.md) now sends
 file changes into a Kole handler through the C API, then proves that replacing
-or closing its lifecycle domain stops callbacks. The C ABI is version 2.
+or closing its lifecycle domain stops callbacks. Kole can now call the host's
+first [native method binding](docs/native-methods.md) to start that watcher.
+The C ABI is version 3.
+The next ten product capabilities are tracked in the [adoption roadmap](docs/adoption-roadmap.md).
 Try the small real-world [Log Summary developer tool](examples/mini-projects/README.md) to explore Kole through a runnable program.
 
 Run the standalone Windows `kole.exe` without installing Node.js, Java, or .NET. The native interpreter is implemented in C# and compiled with Native AOT. A JavaScript reference implementation remains for development and tests. See [native builds](docs/native.md) and [VS Code support](docs/editor.md).

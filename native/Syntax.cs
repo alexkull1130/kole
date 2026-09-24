@@ -242,7 +242,7 @@ static class Lexer
 sealed class Parser(List<Token> tokens)
 {
     int pos, loops;
-    static readonly HashSet<string> Reserved = ["const", "switch", "case", "default", "try", "catch", "finally", "throw", "using", "package", "import", "extends", "override", "abstract", "super", "class", "interface", "implements", "public", "private", "static", "enum", "state", "requires", "transitions", "require", "if", "else", "while", "for", "return", "break", "continue", "new", "me", "this", "true", "false", "null", "owns", "belongsTo", "atomic"];
+    static readonly HashSet<string> Reserved = ["const", "native", "switch", "case", "default", "try", "catch", "finally", "throw", "using", "package", "import", "extends", "override", "abstract", "super", "class", "interface", "implements", "public", "private", "static", "enum", "state", "requires", "transitions", "require", "if", "else", "while", "for", "return", "break", "continue", "new", "me", "this", "true", "false", "null", "owns", "belongsTo", "atomic"];
     static readonly Dictionary<string, int> Ranks = new() { ["="] = 1, ["+="] = 1, ["-="] = 1, ["||"] = 2, ["&&"] = 3, ["=="] = 4, ["!="] = 4, ["<"] = 5, [">"] = 5, ["<="] = 5, [">="] = 5, ["+"] = 6, ["-"] = 6, ["*"] = 7, ["/"] = 7, ["%"] = 7 };
     Token Peek(int n = 0) => tokens[Math.Min(pos + n, tokens.Count - 1)];
     bool At(string text) => Peek().Text == text && Peek().Kind is not ("string" or "char");
@@ -320,7 +320,7 @@ sealed class Parser(List<Token> tokens)
     {
         var n = new Node();
         var seen = new HashSet<string>();
-        while (new[] { "public", "private", "static", "abstract", "override", "const" }.Any(At))
+        while (new[] { "public", "private", "static", "abstract", "override", "const", "native" }.Any(At))
         {
             var t = Take();
             if (!seen.Add(t.Text) || (t.Text is "public" or "private" && seen.Contains(t.Text == "public" ? "private" : "public")))
@@ -332,6 +332,9 @@ sealed class Parser(List<Token> tokens)
                     break;
                 case "static":
                     n.Static = true;
+                    break;
+                case "native":
+                    n.Native = "host";
                     break;
                 case "abstract":
                     n.Abstract = true;
@@ -405,7 +408,7 @@ sealed class Parser(List<Token> tokens)
             m.Token = t;
             if (Match("enum"))
             {
-                if (m.Const)
+                if (m.Const || m.Native != "")
                     throw new Fault("const applies to fields and local bindings only", t);
                 if (n.Interface || m.Abstract || m.Override)
                     throw new Fault("Invalid enum declaration", t);
@@ -486,6 +489,9 @@ sealed class Parser(List<Token> tokens)
                 }
                 if (m.To != "" && m.Type != "void" || m.From != "" && (m.Static || m.Constructor) || m.Constructor && m.Static)
                     throw new Fault("Invalid lifecycle or constructor modifiers", t);
+                if (m.Native != "" && (!m.Static || m.Constructor || m.Abstract || n.Interface ||
+                    m.From != "" || m.Type != "void" || m.Params.Count != 1 || m.Params[0].Type != "string"))
+                    throw new Fault("Native methods currently require static name(value: string) -> void", t);
                 if (n.Interface)
                 {
                     if (m.Constructor || m.Static || m.Access != "public" || m.From != "")
@@ -498,13 +504,18 @@ sealed class Parser(List<Token> tokens)
                         throw new Fault("Abstract methods require an abstract class", t);
                     Expect(";");
                 }
+                else if (m.Native != "")
+                {
+                    Expect(";");
+                    m.Body = new Node("block", t);
+                }
                 else
                     m.Body = Block();
             }
             else
             {
                 m.Kind = "field";
-                if (n.Interface || m.Static || m.Abstract || m.Override)
+                if (n.Interface || m.Static || m.Abstract || m.Override || m.Native != "")
                     throw new Fault("Invalid field declaration", t);
                 if (At("("))
                     m.Init = Construct(m.Type, t);

@@ -15,3 +15,6 @@ native class registrations. The [working host demo](README.md) uses a native
 polled watcher, `kole_domain_subscribe`, and `kole_runtime_call_string` to
 deliver changes to a Kole method. Making `FileWatcher` directly constructible
 and callable from Kole is the next binding-generator step.
+The first static native method binding is now documented in
+[host-implemented methods](../../docs/native-methods.md); it is registered by
+the host separately from generated declarations.

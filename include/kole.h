@@ -4,7 +4,7 @@
 extern "C" {
 #endif
 
-#define KOLE_API_VERSION 2
+#define KOLE_API_VERSION 3
 
 /* UTF-8 strings. Returned error text remains valid until the next API call or destroy. */
 int kole_api_version(void);
@@ -25,6 +25,12 @@ int kole_runtime_run_with_args(void* runtime, const char* entry_class, int argc,
 /* Invoke a public static method with exactly one string parameter and a void return.
    Returns zero and sets the runtime error on failure. */
 int kole_runtime_call_string(void* runtime, const char* class_name, const char* method_name, const char* value);
+/* Bind a declared static native method with one string parameter and void return.
+   The borrowed UTF-8 value is valid only while the callback runs. Return nonzero on success.
+   Bind after load and before invoking the method. Bindings are cleared by the next load. */
+typedef int (*kole_native_string_void)(void* context, const char* value);
+int kole_runtime_bind_string_void(void* runtime, const char* class_name, const char* method_name,
+                                  kole_native_string_void callback, void* context);
 const char* kole_runtime_last_error(void* runtime);
 int kole_runtime_last_error_code(void* runtime);
 

@@ -1,7 +1,7 @@
 import { KoleError, tokenize } from './lexer.mjs';
 import { literalNumber, makeChar } from './numbers.mjs';
 
-const reserved = new Set(['const', 'switch', 'case', 'default', 'try', 'catch', 'finally', 'throw', 'using', 'package', 'import', 'extends', 'override', 'abstract', 'super', 'class', 'interface', 'implements', 'public', 'private', 'static', 'enum', 'state', 'requires', 'transitions', 'require', 'if', 'else', 'while', 'for', 'return', 'break', 'continue', 'new', 'me', 'this', 'true', 'false', 'null', 'owns', 'belongsTo', 'atomic']);
+const reserved = new Set(['const', 'native', 'switch', 'case', 'default', 'try', 'catch', 'finally', 'throw', 'using', 'package', 'import', 'extends', 'override', 'abstract', 'super', 'class', 'interface', 'implements', 'public', 'private', 'static', 'enum', 'state', 'requires', 'transitions', 'require', 'if', 'else', 'while', 'for', 'return', 'break', 'continue', 'new', 'me', 'this', 'true', 'false', 'null', 'owns', 'belongsTo', 'atomic']);
 const precedence = { '=': 1, '+=': 1, '-=': 1, '||': 2, '&&': 3, '==': 4, '!=': 4, '<': 5, '>': 5, '<=': 5, '>=': 5, '+': 6, '-': 6, '*': 7, '/': 7, '%': 7 };
 
 export function parse(source, file) {
@@ -45,15 +45,15 @@ class Parser {
     return type;
   }
   modifiers() {
-    let access = 'public', isStatic = false, isAbstract = false, isOverride = false, isConst = false;
+    let access = 'public', isStatic = false, isAbstract = false, isOverride = false, isConst = false, native = null;
     const seen = new Set();
-    while (['public', 'private', 'static', 'abstract', 'override', 'const'].some(v => this.at(v))) {
+    while (['public', 'private', 'static', 'abstract', 'override', 'const', 'native'].some(v => this.at(v))) {
       const t = this.take();
       if (seen.has(t.text) || (['public', 'private'].includes(t.text) && (seen.has('public') || seen.has('private')))) throw new KoleError('Duplicate or conflicting modifier', t);
       seen.add(t.text);
-      if (t.text === 'static') isStatic = true; else if (t.text === 'abstract') isAbstract = true; else if (t.text === 'override') isOverride = true; else if (t.text === 'const') isConst = true; else access = t.text;
+      if (t.text === 'static') isStatic = true; else if (t.text === 'abstract') isAbstract = true; else if (t.text === 'override') isOverride = true; else if (t.text === 'const') isConst = true; else if (t.text === 'native') native = 'host'; else access = t.text;
     }
-    return { access, isStatic, isAbstract, isOverride, isConst };
+    return { access, isStatic, isAbstract, isOverride, isConst, native };
   }
   qualifiedName() {
     let name = this.name(); while (this.match('.')) name += '.' + this.name(); return name;
@@ -94,7 +94,7 @@ class Parser {
     while (!this.at('}')) {
       const token = this.peek(), modifiers = this.modifiers();
       if (this.match('enum')) {
-        if (modifiers.isConst) throw new KoleError('const applies to fields and local bindings only', token);
+        if (modifiers.isConst || modifiers.native) throw new KoleError('Invalid enum modifier', token);
         if (modifiers.isAbstract || modifiers.isOverride) throw new KoleError('abstract and override apply to methods only', token);
         if (isInterface) throw new KoleError('Interfaces contain method signatures only', token);
         const name = this.name(), values = [];
@@ -138,6 +138,9 @@ class Parser {
         if (to && type !== 'void') throw new KoleError('Transition methods must return void', token);
         if (from && (modifiers.isStatic || constructor)) throw new KoleError('Lifecycle clauses require an instance method', token);
         if (constructor && modifiers.isStatic) throw new KoleError('A constructor cannot be static', token);
+        if (modifiers.native && (!modifiers.isStatic || constructor || modifiers.isAbstract || isInterface || from ||
+          type !== 'void' || params.length !== 1 || params[0].type !== 'string'))
+          throw new KoleError('Native methods currently require static name(value: string) -> void', token);
         let body;
         if (isInterface) {
           if (constructor || modifiers.isStatic || modifiers.access !== 'public' || from) throw new KoleError('Interface methods must be public instance signatures without lifecycle restrictions', token);
@@ -145,11 +148,12 @@ class Parser {
         } else if (modifiers.isAbstract) {
           if (!isAbstract || constructor || modifiers.isStatic || modifiers.access === 'private') throw new KoleError('Abstract methods require an abstract class and must be public instance methods', token);
           this.expect(';'); body = null;
-        } else body = this.block();
+        } else if (modifiers.native) { this.expect(';'); body = { kind: 'block', statements: [], token }; }
+        else body = this.block();
         members.push({ kind: 'method', name: memberName, type, params, body, from, to, constructor, token, ...modifiers });
       } else {
         if (isInterface) throw new KoleError('Interfaces contain method signatures only', token);
-        if (modifiers.isAbstract || modifiers.isOverride) throw new KoleError('abstract and override apply to methods only', token);
+        if (modifiers.isAbstract || modifiers.isOverride || modifiers.native) throw new KoleError('Invalid field modifier', token);
         if (modifiers.isStatic) throw new KoleError('Static fields are not implemented yet', token);
         const init = this.at('(') ? this.construct(type, token) : this.match('=') ? this.expression() : null;
         if (modifiers.isConst && (!init || lifecycle || relationship)) throw new KoleError('const fields require an initializer and cannot be state or relationship fields', token);

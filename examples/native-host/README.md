@@ -5,6 +5,8 @@ This example is a small C host for Kole's embedding API. It loads
 host callback. A native, polled `FileWatcher` reads a local file and publishes
 content changes through a lifecycle domain. Each event calls the script's
 public static `onChanged(path: string) -> void` handler.
+The script starts the watcher by calling its host-implemented
+`FileWatcher.start(path: string)` method.
 
 Build the native shared library on Windows:
 
@@ -43,14 +45,20 @@ the exact output and exits nonzero if an event arrives after either closure.
 Content polling makes this test deterministic in CI; the example does not use
 OS file notifications. It removes its temporary file on exit.
 
-`kole_runtime_call_string` is the version 2 bridge from a native event to
+`kole_runtime_call_string` is the bridge from a native event to
 Kole. It accepts a public static `void` method with exactly one `string`
 parameter. A missing or incompatible handler returns zero and sets
 `kole_runtime_last_error_code` to `KOLE_ERROR_PROGRAM`. The host owns the
 watcher and its domain; the script receives events. See
 [the ownership contract](../../docs/ownership.md) for cleanup rules.
 
+`static native start(path: string) -> void;` is implemented by the C host
+through `kole_runtime_bind_string_void` after loading the script. The host
+creates the watcher in the current lifecycle domain when Kole calls it. See
+[host-implemented methods](../../docs/native-methods.md) for the ABI contract
+and present signature limits.
+
 For a proposed script-facing class declaration generated from a manifest,
 see [the file watcher manifest](bindings.md). Generated declarations are not
 yet executable native class bindings; this sample demonstrates the working
-event callback boundary.
+static native method and event callback boundary.
