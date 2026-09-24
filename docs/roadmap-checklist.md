@@ -13,6 +13,7 @@ This checklist ties the product direction to working artifacts. A checked item h
 - [x] **CLI libraries:** `Console`, `File`, and `TextFile` provide the first resource-safe CLI library; `LineCount.k` proves deterministic streaming cleanup with `using`.
 - [x] **Teaching adoption:** the first lifecycle lesson, five classroom-sized exercises, and a runnable owned-resource example are published under `docs/teaching`.
 
-The original ten-item checklist is complete. The next host-boundary work is
-turning generated native class declarations into executable bindings, with
-host methods callable from Kole and checked ownership metadata.
+The original ten-item checklist is complete. The separate
+[adoption roadmap](adoption-roadmap.md) tracks the next product capabilities.
+Its first native-method slice lets Kole invoke a checked host callback;
+constructible native instances and generated registration remain open.

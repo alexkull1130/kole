@@ -9,6 +9,7 @@ sealed class Runtime
     int steps, depth;
     public int MaxSteps = 1_000_000;
     public Action<string> Print = Console.WriteLine;
+    public Func<string, string, string, bool>? NativeStringVoid;
     public Runtime(List<Node> program)
     {
         program = Types.Specialize(Standard.With(program));
@@ -834,6 +835,12 @@ sealed class Runtime
                 Declare(scope, method.Params[i].Name, method.Params[i].Type, args[i], method.Params[i]);
             if (method.Native != "")
             {
+                if (method.Native == "host")
+                {
+                    if (NativeStringVoid?.Invoke(cls.Name, method.Name, (string)scope.Locals[method.Params[0].Name].Value!) != true)
+                        Fail(node, $"Native method {cls.Name}.{method.Name} is unbound or failed");
+                    return null;
+                }
                 var result = Standard.Invoke(this, method.Native, self, method.Params.Select(p => scope.Locals[p.Name].Value).ToList(), node);
                 return method.Type == "void" ? null : CheckType(method.Type, result, cls, method);
             }

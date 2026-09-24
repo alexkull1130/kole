@@ -529,6 +529,7 @@ export class Runtime {
       const scope = new Scope(null, cls, self);
       method.params.forEach((p, i) => this.declare(scope, p.name, p.type, args[i], p));
       if (method.native) {
+        if (method.native === 'host') this.fail(node, 'Native method requires an embedding host');
         const result = invokeStandard(this, method.native, self, method.params.map(p => scope.find(p.name).value), node);
         return method.type === 'void' ? undefined : this.checkType(method.type, result, cls, method);
       }

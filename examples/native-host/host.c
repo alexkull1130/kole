@@ -10,6 +10,7 @@ typedef void (__cdecl *output_fn)(void*, kole_output, void*);
 typedef int (__cdecl *load_fn)(void*, const char*, const char*);
 typedef int (__cdecl *run_fn)(void*, const char*, int, const char* const*);
 typedef int (__cdecl *call_string_fn)(void*, const char*, const char*, const char*);
+typedef int (__cdecl *bind_fn)(void*, const char*, const char*, kole_native_string_void, void*);
 typedef int (__cdecl *code_fn)(void*);
 typedef const char* (__cdecl *error_fn)(void*);
 typedef void* (__cdecl *subscribe_fn)(void*, kole_callback, void*);
@@ -28,6 +29,10 @@ typedef struct FileWatcher {
 
 typedef struct Host {
   void* runtime;
+  void* domain;
+  FileWatcher* watcher;
+  subscribe_fn subscribe;
+  on_close_fn on_close;
   call_string_fn call_string;
   code_fn error_code;
   error_fn error;
@@ -87,6 +92,13 @@ static int watcher_start(FileWatcher* watcher, const char* path, void* domain,
   return watcher->close_action != NULL;
 }
 
+static int native_start(void* context, const char* path) {
+  Host* host = (Host*)context;
+  if (!host->watcher || !host->domain || host->watcher->subscription) return 0;
+  return watcher_start(host->watcher, path, host->domain,
+                       host->subscribe, host->on_close, host);
+}
+
 static int watcher_poll(FileWatcher* watcher, publish_fn publish) {
   char current[256];
   if (watcher->closed) return 1;
@@ -108,6 +120,7 @@ int main(void) {
   load_fn load = (load_fn)GetProcAddress(dll, "kole_runtime_load");
   run_fn run = (run_fn)GetProcAddress(dll, "kole_runtime_run_with_args");
   call_string_fn call_string = (call_string_fn)GetProcAddress(dll, "kole_runtime_call_string");
+  bind_fn bind = (bind_fn)GetProcAddress(dll, "kole_runtime_bind_string_void");
   code_fn code = (code_fn)GetProcAddress(dll, "kole_runtime_last_error_code");
   error_fn error = (error_fn)GetProcAddress(dll, "kole_runtime_last_error");
   create_fn domain_create = (create_fn)GetProcAddress(dll, "kole_domain_create");
@@ -118,13 +131,14 @@ int main(void) {
   on_close_fn on_close = (on_close_fn)GetProcAddress(dll, "kole_domain_on_close");
   destroy_fn close_action_destroy = (destroy_fn)GetProcAddress(dll, "kole_close_action_destroy");
   publish_fn publish = (publish_fn)GetProcAddress(dll, "kole_domain_publish");
-  if (!version || !create || !destroy || !set_output || !load || !run || !call_string ||
+  if (!version || !create || !destroy || !set_output || !load || !run || !call_string || !bind ||
       !code || !error || !domain_create || !domain_replace || !domain_destroy ||
       !subscribe || !subscription_destroy || !on_close || !close_action_destroy ||
       !publish || version() != KOLE_API_VERSION) return 4;
 
   Host host = {0};
   host.runtime = create(); host.call_string = call_string; host.error_code = code; host.error = error;
+  host.subscribe = subscribe; host.on_close = on_close;
   if (!host.runtime) return 6;
   set_output(host.runtime, output, &host);
   char script[1024];
@@ -135,21 +149,33 @@ int main(void) {
   const char* path = "native-host-watch.txt";
   FileWatcher old_watcher = {0}, new_watcher = {0};
   if (!read_contents("examples/native-host/HostDemo.k", script, sizeof(script)) ||
-      !load(host.runtime, script, "HostDemo.k") || !run(host.runtime, "HostDemo", 1, args)) {
+      !load(host.runtime, script, "HostDemo.k")) {
     fprintf(stderr, "Kole error %d: %s\n", code(host.runtime), error(host.runtime));
     goto cleanup;
   }
-  if (call_string(host.runtime, "HostDemo", "missing", "x") ||
+  if (bind(host.runtime, "FileWatcher", "missing", native_start, &host) ||
       code(host.runtime) != KOLE_ERROR_PROGRAM) goto cleanup;
+  if (!bind(host.runtime, "FileWatcher", "start", native_start, &host)) {
+    fprintf(stderr, "Kole binding error %d: %s\n", code(host.runtime), error(host.runtime));
+    goto cleanup;
+  }
   if (!write_contents(path, "first")) goto cleanup;
   first = domain_create();
-  if (!first || !watcher_start(&old_watcher, path, first, subscribe, on_close, &host)) goto cleanup;
+  host.domain = first; host.watcher = &old_watcher;
+  if (!first || !run(host.runtime, "HostDemo", 1, args)) {
+    fprintf(stderr, "Kole error %d: %s\n", code(host.runtime), error(host.runtime));
+    goto cleanup;
+  }
+  if (!old_watcher.subscription) goto cleanup;
+  if (call_string(host.runtime, "HostDemo", "missing", "x") ||
+      code(host.runtime) != KOLE_ERROR_PROGRAM) goto cleanup;
   if (!write_contents(path, "second") || !watcher_poll(&old_watcher, publish) || host.output_lines != 2) goto cleanup;
 
   second = domain_replace(first);
   if (!second || !old_watcher.closed) goto cleanup;
   if (!write_contents(path, "third") || !watcher_poll(&old_watcher, publish) || host.output_lines != 2) goto cleanup;
-  if (!watcher_start(&new_watcher, path, second, subscribe, on_close, &host)) goto cleanup;
+  host.domain = second; host.watcher = &new_watcher;
+  if (!call_string(host.runtime, "FileWatcher", "start", path) || !new_watcher.subscription) goto cleanup;
   if (!write_contents(path, "fourth") || !watcher_poll(&new_watcher, publish) || host.output_lines != 3) goto cleanup;
   domain_destroy(second); second = NULL;
   if (!new_watcher.closed || !write_contents(path, "fifth") ||
