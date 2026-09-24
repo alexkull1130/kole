@@ -12,5 +12,9 @@ test("native host demonstration uses the published C boundary", () => {
   assert.match(host, /kole_runtime_load/);
   assert.match(host, /kole_runtime_set_output/);
   assert.match(host, /Kole error %d/);
-  assert.match(host, /output_lines==1/);
+  assert.match(host, /kole_runtime_call_string/);
+  assert.match(host, /kole_domain_replace/);
+  assert.match(host, /watcher_poll/);
+  assert.match(host, /host\.output_lines != 3/);
+  assert.match(fs.readFileSync("examples/native-host/HostDemo.k", "utf8"), /onChanged\(path: string\)/);
 });

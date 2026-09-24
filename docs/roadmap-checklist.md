@@ -9,8 +9,10 @@ This checklist ties the product direction to working artifacts. A checked item h
 - [x] **Structured concurrency:** host tasks are children of a lifecycle domain, driven through `kole_domain_poll`, and cancelled when the domain closes.
 - [x] **Hot reload lifecycle policy:** `kole_domain_replace` deliberately closes and replaces a domain; callbacks and tasks never cross the reload boundary.
 - [x] **VS Code ownership diagnostics:** relationship failures include editor hints for nullable back-references, matching owners, ambiguity, cycles, and safe ownership updates.
-- [x] **Flagship native-host demonstration:** `examples/native-host` is a C host that builds against the NativeAOT shared library and proves callbacks stop when a lifecycle domain closes.
+- [x] **Flagship native-host demonstration:** `examples/native-host` is a C host that builds against the NativeAOT shared library, sends polled file changes into a Kole handler, and proves callbacks stop on domain replacement and close.
 - [x] **CLI libraries:** `Console`, `File`, and `TextFile` provide the first resource-safe CLI library; `LineCount.k` proves deterministic streaming cleanup with `using`.
 - [x] **Teaching adoption:** the first lifecycle lesson, five classroom-sized exercises, and a runnable owned-resource example are published under `docs/teaching`.
 
-The unchecked items are sequenced behind the host boundary. The next slices are the binding generator and owner-bound callbacks; both depend on the handle and error conventions in `include/kole.h`.
+The original ten-item checklist is complete. The next host-boundary work is
+turning generated native class declarations into executable bindings, with
+host methods callable from Kole and checked ownership metadata.

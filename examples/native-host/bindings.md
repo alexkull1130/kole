@@ -10,4 +10,8 @@ node scripts/generate-bindings.mjs examples/native-host/FileWatcher.bindings.jso
 
 The generated `bindings.k` records the ownership shape. The generated `bindings.h` exposes `kole_filewatcher_subscribe_changed`, which takes a lifecycle domain so event delivery stops automatically when the project closes or reloads.
 
-A native host implements the platform-specific watcher and connects the generated event function to `kole_domain_subscribe`. This keeps platform details outside the language while preserving Kole's cleanup rules.
+The generator currently writes declarations and C headers, not executable
+native class registrations. The [working host demo](README.md) uses a native
+polled watcher, `kole_domain_subscribe`, and `kole_runtime_call_string` to
+deliver changes to a Kole method. Making `FileWatcher` directly constructible
+and callable from Kole is the next binding-generator step.

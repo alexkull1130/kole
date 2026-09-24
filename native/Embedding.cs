@@ -6,7 +6,7 @@ namespace Kole;
 /// Stable host boundary. The exported functions intentionally use only C ABI types.
 public static unsafe class Embedding
 {
-    const int ApiVersion = 1;
+    const int ApiVersion = 2;
     sealed class Domain
     {
         public bool Open = true;
@@ -146,6 +146,29 @@ public static unsafe class Embedding
         var args = new string[argc];
         for (var i = 0; i < argc; i++) args[i] = Marshal.PtrToStringUTF8(argv[i]) ?? "";
         return RunProgram(session, Marshal.PtrToStringUTF8((IntPtr)entry) ?? "", args);
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "kole_runtime_call_string")]
+    public static int CallString(IntPtr handle, byte* className, byte* methodName, byte* value)
+    {
+        var session = Get(handle);
+        if (session?.Runtime is null || className is null || methodName is null || value is null) return 0;
+        try
+        {
+            var name = Marshal.PtrToStringUTF8((IntPtr)className) ?? "";
+            var member = Marshal.PtrToStringUTF8((IntPtr)methodName) ?? "";
+            if (!session.Runtime.Classes.TryGetValue(name, out var cls) ||
+                !cls.Methods.TryGetValue(member, out var method) ||
+                !method.Static || method.Access != "public" || method.Type != "void" ||
+                method.Params.Count != 1 || method.Params[0].Type != "string")
+                throw new Fault($"Host callback requires public static {name}.{member}(value: string) -> void");
+            session.Runtime.Invoke(new Method(cls, null, method),
+                [Marshal.PtrToStringUTF8((IntPtr)value) ?? ""], method);
+            session.SetError("");
+            return 1;
+        }
+        catch (Fault error) { session.SetError(error.Message, 1); return 0; }
+        catch (Exception error) { session.SetError(error.Message, 2); return 0; }
     }
 
     static int RunProgram(Session? session, string entry, string[] args)
