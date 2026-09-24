@@ -1,6 +1,6 @@
 # Native host demonstration
 
-This example is a small C host for Kole's lifecycle API. It loads and runs a Kole entry class, receives the script's output through a host callback, then creates a domain, subscribes a callback, publishes one event, closes the domain, and publishes again. The second publish is a safe no-op because close cancels every domain-owned subscription.
+This example is a small C host for Kole's embedding API. It loads and runs a Kole entry class and receives the script's output through a host callback.
 
 Build the native shared library on Windows:
 
@@ -12,13 +12,10 @@ NativeAOT publishing requires Visual Studio's **Desktop development with C++** w
 
 The repository's Windows CI workflow publishes the library, compiles this host, and runs it against the resulting DLL.
 
-Then compile `host.c` with your C compiler, including `include/kole.h` and linking against the generated `kole_embedding.lib`. Running it prints:
+Then compile `host.c` with your C compiler, including `include/kole.h`. The host loads `kole_embedding.dll` at runtime, so no import library is needed. Running it prints:
 
 ```text
 script: Kole is hosted: native-host
-closed: second
-closed: first
-callbacks: 1
 ```
 
 The public boundary is [include/kole.h](../../include/kole.h). Host programs should create a domain for each script-owned resource graph and close or replace it when that graph ends or reloads.
@@ -31,6 +28,6 @@ Use `kole_runtime_run_with_args` when the entry class declares `main(args: strin
 
 When `kole_runtime_load` or `kole_runtime_run` returns zero, read both `kole_runtime_last_error_code` and `kole_runtime_last_error`. Program errors are safe script failures; internal errors should be reported to the host's diagnostics. The example shows that error path before it creates the lifecycle domain.
 
-The host also registers two native close actions. They run exactly once in reverse registration order, after the domain has stopped callbacks and tasks.
+The lifecycle domain functions remain available through the same C API; see [the ownership contract](../../docs/ownership.md) for their cleanup rules.
 
 For a concrete binding description of a closeable, event-driven host resource, see [the file watcher manifest](bindings.md).
