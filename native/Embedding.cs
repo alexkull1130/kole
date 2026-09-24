@@ -113,7 +113,8 @@ public static unsafe class Embedding
             var text = Marshal.PtrToStringUTF8((IntPtr)source) ?? "";
             var name = Marshal.PtrToStringUTF8((IntPtr)file) ?? "<embedded>";
             var classes = Parser.Parse(text, name).Classes;
-            session.Runtime = new Runtime(Types.Specialize(Standard.With(classes)));
+            // Runtime adds the standard library and specializes generics once.
+            session.Runtime = new Runtime(classes);
             ApplyOutput(session);
             new Checker(session.Runtime).Check();
             session.SetError("");
